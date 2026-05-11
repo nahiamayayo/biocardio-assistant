@@ -257,8 +257,8 @@ with st.sidebar:
 
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE (Las X) y los manuales de lab.</div>', unsafe_allow_html=True)
-    f_proto = st.file_uploader("1. SUBIR PROTOCOLO (Apartado SoE)", type=["pdf"])
+    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE (Las X) y los Manuales de Laboratorio.</div>', unsafe_allow_html=True)
+    f_proto = st.file_uploader("1. SUBIR PROTOCOLO", type=["pdf"])
     f_labs = st.file_uploader("2. SUBIR MANUALES DE LABORATORIO", type=["pdf"], accept_multiple_files=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -280,7 +280,7 @@ st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</di
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">La IA analizará el protocolo y generará las hojas de visita según el diseño del ensayo seleccionado.</div>', unsafe_allow_html=True)
     
-    if st.button("✨ Generar Hoja de Visita Oficial HUJ"):
+    if st.button("Generar Hoja de Visita"):
         if not api_key or not f_proto:
             st.error("⚠️ Faltan documentos o la API Key.")
         else:
