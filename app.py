@@ -236,7 +236,7 @@ with st.sidebar:
     modelo_seleccionado = st.selectbox("Modelo de Inteligencia Artificial:", ["gemini-3.1-flash-lite-preview"], help="Modelo optimizado para protocolos médicos.")
     
     st.divider()
-    st.caption("v3.2 | Hospital Universitario de Jaén")
+    st.caption("v3.3 | Hospital Universitario de Jaén")
 
 # Paso 1
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
@@ -256,7 +256,7 @@ st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</
 with st.container():
     st.markdown("""
     <div class="step-container">
-        <div class="step-explanation">Indica las páginas donde se encuentra la información clave de la visita.</div>
+        <div class="step-explanation">Indica las páginas de la tabla de procedimientos (SoE) y los detalles técnicos (Study Assessments).</div>
     """, unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
@@ -264,7 +264,8 @@ with st.container():
         p_tabla = st.text_input("Páginas de la Tabla SoE (ej. 11-16):", "11-16")
         v_proto = st.text_input("Visita en Protocolo (ej. Visit 10):", "Visit 10")
     with c2:
-        p_glosario = st.text_input("Páginas del Glosario (ej. 40-50):", "40-50")
+        # CAMBIO AQUÍ: Glosario por Study Assessments
+        p_assessments = st.text_input("Páginas Study Assessments (ej. 40-60):", "40-60")
         v_lab = st.text_input("Visita en Manual Lab (ej. Visit 10):", "Visit 10")
         
     st.markdown("</div>", unsafe_allow_html=True)
@@ -287,10 +288,11 @@ with st.container():
             status_text = st.empty()
             
             try:
-                status_text.text("📖 Leyendo tablas del protocolo...")
+                status_text.text("📖 Leyendo tablas y procedimientos del protocolo...")
                 p_bytes = f_proto.read()
                 texto_tabla_proto = extraer_texto_paginas(p_bytes, p_tabla)
-                texto_glosario = extraer_texto_paginas(p_bytes, p_glosario)
+                # CAMBIO AQUÍ: Extraemos el texto de Assessments
+                texto_assessments = extraer_texto_paginas(p_bytes, p_assessments)
                 barra_progreso.progress(30)
                 
                 status_text.text("🧪 Analizando documentos de laboratorio...")
@@ -307,23 +309,24 @@ with st.container():
                 prompt = f"""
                 Eres un Data Manager Clínico. Tu tarea es LEER las tablas y redactar un JSON para la visita '{v_proto}' (Visita Lab: '{v_lab}').
 
-                --- TEXTO DE LA TABLA DEL PROTOCOLO ---
+                --- TEXTO DE LA TABLA DEL PROTOCOLO (SoE) ---
                 {texto_tabla_proto}
 
-                --- TEXTO DEL GLOSARIO ---
-                {texto_glosario}
+                --- TEXTO DE DETALLES TÉCNICOS (STUDY ASSESSMENTS) ---
+                {texto_assessments}
 
                 --- TEXTO DE LOS DOCUMENTOS DE LABORATORIO ---
                 {texto_laboratorios[:100000]}
 
                 INSTRUCCIONES:
                 1. TABLA DEL PROTOCOLO: Busca la visita '{v_proto}'. Lista todos los procedimientos marcados con (X).
-                2. LABORATORIO (NO AGRUPAR): Busca '{v_lab}' en el texto de lab. Crea UN BLOQUE INDIVIDUAL para cada analito.
+                2. DETALLES TÉCNICOS: Usa el texto de 'STUDY ASSESSMENTS' para añadir instrucciones precisas en el campo 'detalles' de cada procedimiento (ej. si el ECG es en supino, si los signos vitales requieren reposo previo, etc.).
+                3. LABORATORIO (NO AGRUPAR): Busca '{v_lab}' en el texto de lab. Crea UN BLOQUE INDIVIDUAL para cada analito.
                    Detalles: "- Panel: [Nombre]\\n- Tubo: [Volumen] tapón [COLOR], [procesado]".
-                3. INFUSIÓN: Si se requiere "Infusion" para esta visita, añade en 'administracion' el bloque de texto exacto:
+                4. INFUSIÓN: Si se requiere "Infusion" para esta visita, añade en 'administracion' el bloque de texto exacto:
                    {texto_infusion_obligatorio}
                    Y en signos vitales los tiempos de 15, 30, 45 y 60 min.
-                4. CUESTIONARIOS: Incluir Peso, KCCQ, EQ-5D, SF-36, PGIC en 'pre_dosis' si tocan.
+                5. CUESTIONARIOS: Incluir Peso, KCCQ, EQ-5D, SF-36, PGIC en 'pre_dosis' si tocan.
 
                 JSON:
                 {{ "visita": "{v_proto}", "procedimientos_finales": [ {{"procedimiento": "...", "categoria": "pre_dosis|laboratorio|administracion|post_dosis|continuos|general", "detalles": "...", "tiempos_especificos": []}} ] }}
