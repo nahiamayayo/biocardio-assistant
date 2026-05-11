@@ -269,12 +269,12 @@ with st.container():
     
     c1, c2 = st.columns(2)
     with c1:
-        p_tabla = st.text_input("Páginas de la Tabla SoE (ej. 11-16):", "11-16")
-        v_proto = st.text_input("Visita en Protocolo (ej. Visit 10):", "Visit 10")
+        p_tabla = st.text_input("Páginas de la Tabla SoE (ej. 11-16):")
+        v_proto = st.text_input("Visita en Protocolo (ej. Visit 10):")
     with c2:
         # CAMBIO AQUÍ: Glosario por Study Assessments
-        p_assessments = st.text_input("Páginas Study Assessments (ej. 40-60):", "40-60")
-        v_lab = st.text_input("Visita en Manual Lab (ej. Visit 10):", "Visit 10")
+        p_assessments = st.text_input("Páginas Study Assessments (ej. 40-60):")
+        v_lab = st.text_input("Visita en Manual Lab (ej. Visit 10):")
         
     st.markdown("</div>", unsafe_allow_html=True)
 
