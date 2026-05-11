@@ -56,14 +56,24 @@ def crear_documento_word_pro(datos_json):
     det = datos.get("detalles", {})
     doc = Document()
     
+    # === FORZAR ESTILOS A NEGRO Y TÍTULOS EN NEGRITA ===
     style = doc.styles['Normal']
     style.font.name = 'Calibri'
     style.font.size = Pt(10)
+    style.font.color.rgb = RGBColor(0, 0, 0) # Todo el texto normal en negro
+    
+    for i in range(1, 4):
+        if f'Heading {i}' in doc.styles:
+            h_style = doc.styles[f'Heading {i}']
+            h_style.font.name = 'Calibri'
+            h_style.font.bold = True # Títulos siempre en negrita
+            h_style.font.color.rgb = RGBColor(0, 0, 0) # Títulos siempre en negro puro
     
     # ==========================================
     # PÁGINA 1: HOJA DE ENFERMERÍA
     # ==========================================
-    doc.add_heading(f"HOJA DE ENFERMERÍA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    h_enf = doc.add_heading(f"HOJA DE ENFERMERÍA: {datos.get('visita', 'N/A')}", level=1)
+    h_enf.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph(f"Protocolo: {datos.get('protocolo', 'ALXN2220-ATTR-CM-301')}     ID: ______________").bold = True
     
     doc.add_heading("PRIMEROS PASOS", level=2)
@@ -95,8 +105,7 @@ def crear_documento_word_pro(datos_json):
 
     if proc.get("laboratorio"):
         doc.add_paragraph("☐ Extraer muestras de sangre y orina (dentro de las 2h antes)").bold = True
-        # AQUÍ SE INYECTAN LOS TUBOS DEL MANUAL DE LABORATORIO
-        tubos = det.get("laboratorio_tubos", "Revisar manual de laboratorio para los tubos.")
+        tubos = det.get("laboratorio_tubos", "Revisar manual de laboratorio para los tubos correspondientes a esta visita.")
         doc.add_paragraph(f"Tubos a extraer: {tubos}").italic = True
         doc.add_paragraph("☐ Orina")
 
@@ -151,7 +160,8 @@ def crear_documento_word_pro(datos_json):
     # PÁGINA 2: HOJA MÉDICA
     # ==========================================
     doc.add_page_break()
-    doc.add_heading(f"HOJA MÉDICA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    h_med = doc.add_heading(f"HOJA MÉDICA: {datos.get('visita', 'N/A')}", level=1)
+    h_med.alignment = WD_ALIGN_PARAGRAPH.CENTER
     doc.add_paragraph(f"Protocolo: {datos.get('protocolo', 'ALXN2220-ATTR-CM-301')}     ID: ______________").bold = True
     doc.add_paragraph("☐ Fecha de la visita: ______________\n")
 
@@ -207,16 +217,24 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texto = ""
     try:
-        p_set = set()
-        for b in paginas_str.split(','):
-            if '-' in b:
-                s, e = b.split('-')
-                p_set.update(range(int(s), int(e)+1))
-            else: p_set.add(int(b))
-        for p in sorted(list(p_set)):
+        paginas_a_leer = []
+        if paginas_str.strip(): 
+            p_set = set()
+            for b in paginas_str.split(','):
+                if '-' in b:
+                    s, e = b.split('-')
+                    p_set.update(range(int(s), int(e)+1))
+                else: 
+                    p_set.add(int(b))
+            paginas_a_leer = sorted(list(p_set))
+        else:
+            paginas_a_leer = range(1, len(doc) + 1)
+            
+        for p in paginas_a_leer:
             if 0 < p <= len(doc):
                 texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("text") + "\n"
-    except: texto = "Error en lectura."
+    except Exception as e: 
+        texto = f"Error en lectura de PDF: {e}"
     return texto
 
 # --- 🖥️ INTERFAZ WEB ---
@@ -234,17 +252,15 @@ with st.sidebar:
     api_key = st.text_input("Introduce tu API Key:", type="password")
     st.divider()
     modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3.1-flash-lite-preview"])
-    st.caption("v6.0 | Plantillas Exactas + Laboratorio")
+    st.caption("v6.2 | Estilos Limpios + Bugfix Lab")
 
-# PASO 1 (AQUÍ ESTÁ TU LABORATORIO DE VUELTA)
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE y los Manuales de Laboratorio.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE (Las X) y los manuales de lab.</div>', unsafe_allow_html=True)
     f_proto = st.file_uploader("1. SUBIR PROTOCOLO (Apartado SoE)", type=["pdf"])
     f_labs = st.file_uploader("2. SUBIR MANUALES DE LABORATORIO", type=["pdf"], accept_multiple_files=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# PASO 2 (AQUÍ ESTÁN TUS ASSESSMENTS DE VUELTA)
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">Indica la página y el nombre de la visita a generar.</div>', unsafe_allow_html=True)
@@ -255,12 +271,11 @@ with st.container():
     v_lab = c2.text_input("Visita en Manual Lab:", "Visit 17")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# PASO 3
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">La IA analizará todo y generará las Hojas oficiales.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-container"><div class="step-explanation">La IA analizará el protocolo y generará las Hojas oficiales en blanco y negro perfectas.</div>', unsafe_allow_html=True)
     
-    if st.button("✨ Generar Hoja de Visita Oficial HUJ"):
+    if st.button("Generar Hoja de Visita Oficial HUJ"):
         if not api_key or not f_proto:
             st.error("⚠️ Faltan documentos o la API Key.")
         else:
@@ -268,45 +283,43 @@ with st.container():
             status_text = st.empty()
             
             try:
-                status_text.text("📖 Leyendo la tabla del protocolo y los assessments...")
+                status_text.text("Leyendo la tabla del protocolo y los assessments...")
                 p_bytes = f_proto.read()
                 t_soe = extraer_texto_paginas(p_bytes, p_tabla)
                 t_ass = extraer_texto_paginas(p_bytes, p_assessments)
                 barra_progreso.progress(30)
 
-                status_text.text("🧪 Analizando manuales de laboratorio...")
+                status_text.text("Analizando manuales de laboratorio...")
                 t_lab = ""
                 if f_labs:
                     for f in f_labs:
                         t_lab += f"\n--- DOC: {f.name} ---\n" + extraer_texto_paginas(f.read(), "")
                 barra_progreso.progress(60)
                 
-                status_text.text("🧠 IA construyendo documento médico a medida...")
+                status_text.text("IA cruzando información...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
-                Eres el Director Médico del ensayo. Tu tarea es activar las secciones de una plantilla.
-
-                --- LISTA MAESTRA DE PROCEDIMIENTOS ---
+                Eres el Director Médico del ensayo. Analiza la tabla de protocolo proporcionada para la visita '{v_proto}'.
+                
+                --- LISTA MAESTRA DE PROCEDIMIENTOS POSIBLES ---
                 {PROCEDIMIENTOS_MAESTROS}
                 
-                --- TABLA DEL PROTOCOLO (SoE) ---
+                --- TABLA SOE --- 
                 {t_soe}
-
-                --- DETALLES TÉCNICOS (STUDY ASSESSMENTS) ---
+                
+                --- DETALLES TÉCNICOS --- 
                 {t_ass}
-
-                --- MANUAL DE LABORATORIO ---
+                
+                --- LABORATORIO --- 
                 {t_lab[:80000]}
 
                 INSTRUCCIONES CRÍTICAS:
                 1. Revisa la columna '{v_proto}' del protocolo. Pon a "true" las secciones de la plantilla si ves la marca.
-                2. NYHA y 6MWT: Si ves estos términos en la tabla o en los detalles, actívalos ("true").
-                3. LABORATORIO: Busca la visita '{v_lab}' en el manual de laboratorio. Extrae exactamente qué tubos, volúmenes y colores se necesitan (ej. "5 tubos rojos, 3 dorados...") y ponlo en "laboratorio_tubos".
-                4. ASSESSMENTS: Extrae detalles específicos del ECG o 6MWT desde el Study Assessments.
+                2. LABORATORIO: Busca la visita '{v_lab}' en el manual de laboratorio. Extrae exactamente qué tubos, volúmenes y colores se necesitan y ponlo en "laboratorio_tubos".
 
-                FORMATO JSON ESTRICTO DE SALIDA:
+                Formato estricto de salida:
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
@@ -324,9 +337,9 @@ with st.container():
                     "karnofsky": true|false
                   }},
                   "detalles": {{
-                    "laboratorio_tubos": "Resumen exacto de los tubos y colores a extraer según el manual...",
-                    "instrucciones_ecg": "Detalles técnicos del ECG extraídos de los Assessments...",
-                    "instrucciones_6mwt": "Detalles técnicos del test de marcha extraídos de los Assessments..."
+                    "laboratorio_tubos": "Resumen exacto de los tubos y colores a extraer...",
+                    "instrucciones_ecg": "Detalles técnicos del ECG...",
+                    "instrucciones_6mwt": "Detalles técnicos del test de marcha..."
                   }}
                 }}
                 """
@@ -335,7 +348,7 @@ with st.container():
                 doc_word = crear_documento_word_pro(res.text)
                 
                 barra_progreso.progress(100)
-                status_text.success("✅ Documentos médicos oficiales generados con éxito.")
+                status_text.success("✅ Documentos generados con éxito.")
                 
                 st.download_button(
                     label="⬇️ Descargar Documento Word",
