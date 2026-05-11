@@ -127,7 +127,7 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
     except: texto = "Error en lectura."
     return texto
 
-# --- 💉 TEXTO INFUSIÓN COMPLETO (RECUPERADO) ---
+# --- 💉 TEXTO INFUSIÓN COMPLETO (ASEGURADO) ---
 texto_infusion_obligatorio = """*La infusión debe durar 1 hora.
 *No diluir el fármaco.
 *Limpiar las vías ANTES y DESPUÉS de la infusión con dextrosa 5%: Limpiar la vía con dextrosa 5% antes de la infusión solamente si se le ha infundido algún otro fluido o fármaco al paciente. Si la línea de infusión es nueva, no hace falta hacer este lavado previo a la infusión con dextrosa 5%. 
@@ -154,14 +154,14 @@ with col_logo:
     except: st.title("🏥")
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
-    st.write("Hospital Universitario de Jaén | Precisión Garantizada v3.8")
+    st.write("Hospital Universitario de Jaén | v3.9 (Gemini 3.1)")
 
 with st.sidebar:
     st.header("🔑 Configuración")
     st.markdown("Obtén tu clave en [Google AI Studio](https://aistudio.google.com/app/apikey)")
     api_key = st.text_input("Introduce API Key:", type="password")
-    # MODELO CORREGIDO A NOMBRE OFICIAL
-    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-1.5-flash", "gemini-1.5-pro"])
+    # MODELO CORRECTO DE TU LISTA
+    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3.1-flash-lite-preview"])
 
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
@@ -180,11 +180,11 @@ with st.container():
     v_lab = c2.text_input("Nombre Visita en Lab:", "Visit 17")
     st.markdown('</div>', unsafe_allow_html=True)
 
-if st.button("GENERAR HOJA DE VISITA"):
+if st.button("✨ GENERAR HOJA DE VISITA"):
     if not api_key or not f_proto:
         st.error("Faltan datos.")
     else:
-        with st.spinner("Analizando datos..."):
+        with st.spinner("Escaneando tabla minuciosamente..."):
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
@@ -201,10 +201,12 @@ if st.button("GENERAR HOJA DE VISITA"):
                 REGLAS:
                 1. Busca la columna '{v_proto}'. Si hay marca, incluye el procedimiento.
                 2. NO OLVIDES: '6-minute walk test', 'NYHA class', 'Physical Exam', 'Medical Review', 'Echocardiogram'.
-                3. Si hay infusión, añade este bloque: {texto_infusion_obligatorio}
+                3. Si el término '6-minute' o 'walk' aparece en las páginas de la tabla, inclúyelo obligatoriamente en 'pre_dosis'.
+                4. Si hay infusión, añade este bloque: {texto_infusion_obligatorio}
                 
                 JSON: {{ "visita": "{v_proto}", "procedimientos_finales": [...] }}
                 """
                 res = model.generate_content(prompt)
                 st.download_button("⬇️ DESCARGAR WORD", crear_documento_word_pro(res.text), f"Checklist_{v_proto}.docx")
+                st.success("✅ ¡Generado!")
             except Exception as e: st.error(f"Error: {e}")
