@@ -15,17 +15,17 @@ st.set_page_config(page_title="BioCardio Clinical Assistant", page_icon="🏥", 
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f4f7f4; }
-    
-    /* MEJORA VISUAL PASO 1: Etiquetas de carga críticas */
+    .stApp {
+        background-color: #f4f7f4;
+    }
+    /* Estilo para las etiquetas de carga de archivos */
     .stFileUploader label {
         font-weight: bold !important;
         color: #1a1a1a !important;
         font-size: 19px !important;
-        margin-bottom: 12px !important;
         display: block;
+        margin-bottom: 12px !important;
     }
-    
     .step-container {
         background-color: white;
         padding: 25px 30px;
@@ -40,12 +40,16 @@ st.markdown("""
         font-weight: bold;
         margin-top: 15px;
         margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
     .step-explanation {
         color: #1a1a1a;
         font-size: 16px;
         font-weight: 500;
         margin-bottom: 20px;
+        font-style: italic;
         border-bottom: 2px solid #eee;
         padding-bottom: 10px;
     }
@@ -53,9 +57,12 @@ st.markdown("""
         background-color: #007d32 !important;
         color: white !important;
         border-radius: 12px !important;
-        height: 55px !important;
+        padding: 15px 30px !important;
         font-size: 18px !important;
         font-weight: bold !important;
+        width: 100%;
+        transition: 0.3s;
+        border: none !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -69,6 +76,10 @@ def crear_documento_word_pro(datos_json):
         datos = {"visita": "Error en formato", "procedimientos_finales": []}
 
     doc = Document()
+    style = doc.styles['Normal']
+    style.font.name = 'Calibri'
+    style.font.size = Pt(11)
+    
     doc.add_heading(f"HOJA DE VISITA: {datos.get('visita', 'N/A')}", 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     info_table = doc.add_table(rows=2, cols=2)
@@ -97,7 +108,6 @@ def crear_documento_word_pro(datos_json):
                 
                 proc_nombre = item.get('procedimiento', '').lower()
 
-                # --- AUTO-DETECCIÓN DE CAMPOS ---
                 if any(x in proc_nombre for x in ["ecg", "electrocardiograma", "12-lead"]):
                     doc.add_paragraph("• Posición supino. FC: ... PR: ... QRS: ... QT: ... QTc: ...", style='List Bullet')
                 
@@ -136,23 +146,34 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
         for p in sorted(list(p_set)):
             if 0 < p <= len(doc):
                 texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("text") + "\n"
-    except: texto = "Error en lectura."
+    except: texto = "Error en lectura de páginas."
     return texto
 
-# --- 🖥️ INTERFAZ ---
+# --- 🖥️ INTERFAZ WEB ---
 col_logo, col_titulo = st.columns([1, 5])
 with col_logo:
     try: st.image("huj.png", width=140)
-    except: st.title("🏥")
+    except: st.markdown("## 🏥")
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
     st.write("Hospital Universitario de Jaén | Gestión de Precisión v3.7")
 
+# --- BARRA LATERAL (RECUPERADA) ---
 with st.sidebar:
     st.header("🔑 Configuración")
-    api_key = st.text_input("Introduce API Key:", type="password")
-    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3-flash"])
+    st.markdown("""
+    **¿Cómo obtener tu clave?**
+    1. Entra en [Google AI Studio](https://aistudio.google.com/app/apikey).
+    2. Pulsa en **"Create API Key"**.
+    3. Copia el código y pégalo aquí abajo:
+    """)
+    api_key = st.text_input("Introduce tu API Key personal:", type="password")
+    
+    st.divider()
+    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3-flash"], help="Modelo optimizado para máxima precisión y velocidad.")
+    st.info("Nota: Los documentos subidos se borran automáticamente al cerrar la sesión.")
 
+# PASOS
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">Sube el Protocolo y los Manuales de Laboratorio:</div>', unsafe_allow_html=True)
@@ -172,9 +193,9 @@ with st.container():
 
 if st.button("✨ GENERAR HOJA DE VISITA SIN OMISIONES"):
     if not api_key or not f_proto:
-        st.error("Faltan datos obligatorios.")
+        st.error("⚠️ Debes introducir la API Key y subir el Protocolo.")
     else:
-        with st.spinner("Analizando tabla fila por fila..."):
+        with st.spinner("Escaneando tabla minuciosamente..."):
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
@@ -182,22 +203,21 @@ if st.button("✨ GENERAR HOJA DE VISITA SIN OMISIONES"):
                 t_soe = extraer_texto_paginas(p_bytes, p_tabla)
                 t_ass = extraer_texto_paginas(p_bytes, p_assessments)
                 
-                # PROMPT DE MÁXIMA PRECISIÓN
                 prompt = f"""
                 Misión: Traslada TODA la información de la columna '{v_proto}' sin omitir ni un solo punto.
                 
-                DATOS TABLA SOE: {t_soe}
-                DATOS TÉCNICOS: {t_ass}
+                TABLA SOE: {t_soe}
+                DETALLES TÉCNICOS: {t_ass}
 
                 REGLAS DE ORO:
                 1. Escanea la columna '{v_proto}' de arriba a abajo. Cualquier fila con una marca (X, punto, asterisco) DEBE incluirse.
-                2. SIEMPRE incluye (si están marcados): 6-Minute Walk Test, NYHA Class, Physical Exam, Medical Review, Echocardiogram.
-                3. Si el texto menciona '6-minute' o 'walk' en las páginas de la tabla, inclúyelo en 'pre_dosis'. No es opcional.
-                4. No resumas. Si la tabla dice 'Medical history and physical examination', escribe el nombre completo.
+                2. ES OBLIGATORIO incluir (si están marcados): 6-Minute Walk Test, NYHA Class, Physical Exam, Medical Review, Echocardiogram.
+                3. Si el término '6-minute' o 'walk' aparece en las páginas de la tabla, inclúyelo obligatoriamente en 'pre_dosis'.
+                4. No resumas nombres. Extrae detalles de 'Study Assessments'.
                 
                 JSON: {{ "visita": "{v_proto}", "procedimientos_finales": [...] }}
                 """
                 res = model.generate_content(prompt)
-                st.success("✅ Análisis completado.")
                 st.download_button("⬇️ DESCARGAR WORD", crear_documento_word_pro(res.text), f"Checklist_{v_proto}.docx")
+                st.success("✅ ¡Generado! Ya puedes descargar.")
             except Exception as e: st.error(f"Error: {e}")
