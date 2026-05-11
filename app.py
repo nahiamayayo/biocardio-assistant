@@ -19,13 +19,13 @@ st.markdown("""
     .stApp {
         background-color: #f4f7f4;
     }
-    /* INYECCIÓN 1: Mejorar visibilidad de las etiquetas de subir PDF */
+    /* Estilo de las etiquetas de los cargadores (Paso 1) */
     .stFileUploader label {
         font-weight: bold !important;
         color: #1a1a1a !important;
         font-size: 19px !important;
-        margin-bottom: 12px !important;
         display: block;
+        margin-bottom: 12px !important;
     }
     /* Estilo de los contenedores de pasos (Tarjetas) */
     .step-container {
@@ -75,7 +75,42 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 📄 GENERADOR DEL WORD (INCLUYE ECG Y 6MWT) ---
+# --- 📋 LISTA MAESTRA (ONTOLOGÍA CERRADA) ---
+PROCEDIMIENTOS_MAESTROS = """
+1. Informed consent / Eligibility assessment
+2. Patient identification number / Demographics
+3. Inclusion/exclusion criteria / Mixed phenotype diagnosis
+4. Medical history / Prior medications, therapies, and procedures
+5. Full physical examination / Symptom-directed physical examination
+6. Height and body weight
+7. Karnofsky Performance Status score
+8. NYHA Functional Classification / NYHA class
+9. 6-Minute Walk Test (6MWT)
+10. Vital signs
+11. 12-lead ECG (Single or Triplicate)
+12. Echocardiogram
+13. Cardiac scintigraphy / Cardiac MRI
+14. PND score / FAP stage
+15. Neurological assessments: NC studies, NIS, NIS-LL, LLF test
+16. Norfolk-QoL-DN / KCCQ / KCCQ-OS / EQ-5D-5L / SF-36 / PGIC
+17. Central clinical laboratory tests (Serum chemistry, hematology, urinalysis, coagulation, LFTs)
+18. Local platelet count
+19. sFLC, sIFE, and uIFE
+20. Cardiac Biomarker Samples (NfL, sNfL, CRP, hs-cTnT, NT-proBNP)
+21. FSH screening / Serum or Urine pregnancy test
+22. TTR genotyping / Tissue biopsy
+23. Pharmacodynamic Assessments (TTR protein, vitamin A levels)
+24. Additional biomarkers for further research (optional future research samples)
+25. Pharmacokinetic (PK) samples / plasma pk
+26. Immunogenicity (ADA) samples
+27. Review/Record Hospitalizations, Urgent HF Visits, and Procedures
+28. Check-in contact / Vital status check
+29. Concomitant Medications / Adverse events (AEs)
+30. Randomization
+31. Study intervention infusion / Study drug administration
+"""
+
+# --- 📄 GENERADOR DEL WORD ---
 def crear_documento_word_pro(datos_json):
     try:
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
@@ -131,8 +166,14 @@ def crear_documento_word_pro(datos_json):
                         ecg_p.paragraph_format.left_indent = Pt(20)
                         ecg_p.add_run("• Posición supino\n• Frecuencia cardíaca: ..........\n• PR: ..........\n• QRS: ..........\n• QT: ..........\n• QTc: ..........")
 
+                    # --- INYECCIÓN ESPECIAL: NYHA ---
+                    if "nyha" in proc_nombre:
+                        nyha_p = doc.add_paragraph()
+                        nyha_p.paragraph_format.left_indent = Pt(20)
+                        nyha_p.add_run("• Clasificación NYHA:  I [ ]   II [ ]   III [ ]   IV [ ]").bold = True
+
                     # --- INYECCIÓN ESPECIAL: TEST DE 6 MINUTOS ---
-                    if "6 min" in proc_nombre or "6-min" in proc_nombre:
+                    if any(x in proc_nombre for x in ["6 min", "6-min", "6mwt", "walk", "marcha"]):
                         test_p = doc.add_paragraph()
                         test_p.paragraph_format.left_indent = Pt(20)
                         test_p.add_run("(después de sangre y cuestionarios, pero antes de la infusión)\n").italic = True
@@ -194,7 +235,7 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
             except: texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("text") + "\n"
     return texto
 
-# --- 💉 TEXTO INFUSIÓN ---
+# --- 💉 TEXTO INFUSIÓN COMPLETO ---
 texto_infusion_obligatorio = """*La infusión debe durar 1 hora.
 *No diluir el fármaco.
 *Limpiar las vías ANTES y DESPUÉS de la infusión con dextrosa 5%: Limpiar la vía con dextrosa 5% antes de la infusión solamente si se le ha infundido algún otro fluido o fármaco al paciente. Si la línea de infusión es nueva, no hace falta hacer este lavado previo a la infusión con dextrosa 5%. 
@@ -244,7 +285,7 @@ with st.sidebar:
     modelo_seleccionado = st.selectbox("Modelo de Inteligencia Artificial:", ["gemini-3.1-flash-lite-preview"], help="Modelo optimizado para protocolos médicos.")
     
     st.divider()
-    st.caption("v3.3 | Hospital Universitario de Jaén")
+    st.caption("v4.0 | Lista Maestra Integrada")
 
 # Paso 1
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
@@ -269,12 +310,11 @@ with st.container():
     
     c1, c2 = st.columns(2)
     with c1:
-        p_tabla = st.text_input("Páginas de la Tabla SoE (ej. 11-16):")
-        v_proto = st.text_input("Visita en Protocolo (ej. Visit 10):")
+        p_tabla = st.text_input("Páginas de la Tabla SoE (ej. 11-16):", "11-16")
+        v_proto = st.text_input("Visita en Protocolo (ej. Visit 10):", "Visit 10")
     with c2:
-        # CAMBIO AQUÍ: Glosario por Study Assessments
-        p_assessments = st.text_input("Páginas Study Assessments (ej. 40-60):")
-        v_lab = st.text_input("Visita en Manual Lab (ej. Visit 10):")
+        p_assessments = st.text_input("Páginas Study Assessments (ej. 40-60):", "40-60")
+        v_lab = st.text_input("Visita en Manual Lab (ej. Visit 10):", "Visit 10")
         
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -299,7 +339,6 @@ with st.container():
                 status_text.text("📖 Leyendo tablas y procedimientos del protocolo...")
                 p_bytes = f_proto.read()
                 texto_tabla_proto = extraer_texto_paginas(p_bytes, p_tabla)
-                # CAMBIO AQUÍ: Extraemos el texto de Assessments
                 texto_assessments = extraer_texto_paginas(p_bytes, p_assessments)
                 barra_progreso.progress(30)
                 
@@ -310,12 +349,15 @@ with st.container():
                         texto_laboratorios += f"\n--- DOC: {f.name} ---\n" + extraer_texto_paginas(f.read(), "")
                 barra_progreso.progress(60)
                 
-                status_text.text("🧠 IA maquetando la hoja clínica...")
+                status_text.text("🧠 IA cruzando tabla con la Lista Maestra...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
-                Eres un Data Manager Clínico. Tu tarea es LEER las tablas y redactar un JSON para la visita '{v_proto}' (Visita Lab: '{v_lab}').
+                Eres un Data Manager Clínico de nivel experto. No debes "adivinar" procedimientos. Tu trabajo es verificar una Lista Maestra contra la tabla SoE para la visita '{v_proto}'.
+
+                --- LISTA MAESTRA DE PROCEDIMIENTOS POSIBLES ---
+                {PROCEDIMIENTOS_MAESTROS}
 
                 --- TEXTO DE LA TABLA DEL PROTOCOLO (SoE) ---
                 {texto_tabla_proto}
@@ -326,25 +368,22 @@ with st.container():
                 --- TEXTO DE LOS DOCUMENTOS DE LABORATORIO ---
                 {texto_laboratorios[:100000]}
 
-                INSTRUCCIONES:
-                1. TABLA DEL PROTOCOLO: Busca la visita '{v_proto}'. Lista todos los procedimientos marcados con (X). REGLA CRÍTICA: NO OMITAS '6-minute walk test', 'NYHA class', 'Physical Exam', 'Medical Review', ni 'Echocardiogram' bajo ningún concepto si tienen una marca asignada a la visita.
-                2. DETALLES TÉCNICOS: Usa el texto de 'STUDY ASSESSMENTS' para añadir instrucciones precisas en el campo 'detalles' de cada procedimiento (ej. si el ECG es en supino, si los signos vitales requieren reposo previo, etc.).
-                3. LABORATORIO (NO AGRUPAR): Busca '{v_lab}' en el texto de lab. Crea UN BLOQUE INDIVIDUAL para cada analito.
-                   Detalles: "- Panel: [Nombre]\\n- Tubo: [Volumen] tapón [COLOR], [procesado]".
-                4. INFUSIÓN: Si se requiere "Infusion" para esta visita, añade en 'administracion' el bloque de texto exacto:
-                   {texto_infusion_obligatorio}
-                   Y en signos vitales los tiempos de 15, 30, 45 y 60 min.
-                5. CUESTIONARIOS: Incluir Peso, KCCQ, EQ-5D, SF-36, PGIC en 'pre_dosis' si tocan. Si el texto menciona '6-minute walk' inclúyelo obligatoriamente también en 'pre_dosis'.
+                INSTRUCCIONES CRÍTICAS (SISTEMA CERRADO):
+                1. REVISA LA LISTA MAESTRA: Lee cada uno de los 31 procedimientos de la Lista Maestra y busca en la columna '{v_proto}' del protocolo. Si ves una marca (X, punto, etc.) en esa fila, cópialo EXACTAMENTE con el nombre de la Lista Maestra.
+                2. NYHA Y 6MWT: Al ser elementos de la Lista Maestra, búscalos exhaustivamente. Si están sombreados o marcados, inclúyelos.
+                3. DETALLES: Usa el texto de 'STUDY ASSESSMENTS' para rellenar la clave 'detalles' de lo que encuentres.
+                4. LABORATORIO: Busca '{v_lab}' en el texto de lab. Crea UN BLOQUE INDIVIDUAL para cada analito con "Panel: [Nombre], Tubo: [Volumen] [COLOR]".
+                5. INFUSIÓN: Si 'Study intervention infusion' o 'Study drug administration' está marcado, añade esto en 'administracion': {texto_infusion_obligatorio}
 
-                JSON:
-                {{ "visita": "{v_proto}", "procedimientos_finales": [ {{"procedimiento": "...", "categoria": "pre_dosis|laboratorio|administracion|post_dosis|continuos|general", "detalles": "...", "tiempos_especificos": []}} ] }}
+                JSON DE SALIDA:
+                {{ "visita": "{v_proto}", "procedimientos_finales": [ {{"procedimiento": "Nombre de la Lista Maestra", "categoria": "pre_dosis|laboratorio|administracion|post_dosis|continuos|general", "detalles": "...", "tiempos_especificos": []}} ] }}
                 """
                 
                 res = model.generate_content(prompt)
                 doc_word = crear_documento_word_pro(res.text)
                 
                 barra_progreso.progress(100)
-                status_text.success("✅ Hoja de visita generada con éxito.")
+                status_text.success("✅ Análisis completo. Estandarización aplicada.")
                 
                 st.download_button(
                     label="⬇️ Descargar Documento Word",
