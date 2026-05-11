@@ -180,7 +180,7 @@ with st.container():
     v_lab = c2.text_input("Nombre Visita en Lab:", "Visit 17")
     st.markdown('</div>', unsafe_allow_html=True)
 
-if st.button("✨ GENERAR HOJA DE VISITA"):
+if st.button("GENERAR HOJA DE VISITA"):
     if not api_key or not f_proto:
         st.error("Faltan datos.")
     else:
