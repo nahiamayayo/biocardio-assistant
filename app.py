@@ -185,10 +185,10 @@ st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">Define las páginas y la visita exacta:</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    p_tabla = c1.text_input("Páginas SoE (Tabla):", "11-16")
-    v_proto = c1.text_input("Nombre Visita en Tabla:", "Visit 17")
-    p_assessments = c2.text_input("Páginas Study Assessments:", "40-60")
-    v_lab = c2.text_input("Nombre Visita en Lab:", "Visit 17")
+    p_tabla = c1.text_input("Páginas SoE (Tabla):")
+    v_proto = c1.text_input("Nombre Visita en Tabla:")
+    p_assessments = c2.text_input("Páginas Study Assessments:")
+    v_lab = c2.text_input("Nombre Visita en Lab:")
     st.markdown('</div>', unsafe_allow_html=True)
 
 if st.button("GENERAR HOJA DE VISITA SIN OMISIONES"):
