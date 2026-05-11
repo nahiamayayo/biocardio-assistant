@@ -191,7 +191,7 @@ with st.container():
     v_lab = c2.text_input("Nombre Visita en Lab:", "Visit 17")
     st.markdown('</div>', unsafe_allow_html=True)
 
-if st.button("✨ GENERAR HOJA DE VISITA SIN OMISIONES"):
+if st.button("GENERAR HOJA DE VISITA SIN OMISIONES"):
     if not api_key or not f_proto:
         st.error("⚠️ Debes introducir la API Key y subir el Protocolo.")
     else:
