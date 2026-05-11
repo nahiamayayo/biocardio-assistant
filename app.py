@@ -265,10 +265,10 @@ st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">Indica la página y el nombre de la visita a generar.</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    p_tabla = c1.text_input("Páginas de la Tabla SoE (ej. 11-16):", "11-16")
-    v_proto = c1.text_input("Visita en Protocolo (ej. Visit 17):", "Visit 17")
-    p_assessments = c2.text_input("Páginas Study Assessments:", "40-60")
-    v_lab = c2.text_input("Visita en Manual Lab:", "Visit 17")
+    p_tabla = c1.text_input("Páginas de la Tabla SoE (ej. 11-16):")
+    v_proto = c1.text_input("Visita en Protocolo (ej. Visit 17):")
+    p_assessments = c2.text_input("Páginas Study Assessments:")
+    v_lab = c2.text_input("Visita en Manual Lab:")
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
