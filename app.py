@@ -24,18 +24,38 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- 📋 LISTA MAESTRA DE PROCEDIMIENTOS ---
+PROCEDIMIENTOS_MAESTROS = """
+1. Informed consent / Eligibility assessment
+2. Demographics / Medical history
+3. Full physical examination / Symptom-directed physical examination
+4. Height and body weight
+5. Karnofsky Performance Status score
+6. NYHA Functional Classification
+7. 6-Minute Walk Test (6MWT)
+8. Vital signs
+9. 12-lead ECG (Single or Triplicate)
+10. Echocardiogram / Cardiac scintigraphy / MRI
+11. Cuestionarios: KCCQ, EQ-5D-5L, SF-36, PGIC, Norfolk
+12. Central clinical laboratory tests
+13. sFLC, sIFE, and uIFE / Cardiac Biomarker Samples
+14. Pharmacokinetic (PK) samples / Immunogenicity (ADA)
+15. Adverse events / Concomitant Medications
+16. Study intervention infusion / Study drug administration
+"""
+
 # --- 📄 GENERADOR DEL WORD (PLANTILLA EXACTA HUJ) ---
 def crear_documento_word_pro(datos_json):
     try:
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
         datos = json.loads(match.group(0)) if match else json.loads(datos_json)
     except Exception as e:
-        datos = {"visita": "Error", "procedimientos": {}}
+        datos = {"visita": "Error", "procedimientos": {}, "detalles": {}}
 
     proc = datos.get("procedimientos", {})
+    det = datos.get("detalles", {})
     doc = Document()
     
-    # Estilos Base
     style = doc.styles['Normal']
     style.font.name = 'Calibri'
     style.font.size = Pt(10)
@@ -54,12 +74,10 @@ def crear_documento_word_pro(datos_json):
     doc.add_heading("PRE-INFUSIÓN (dentro de las 2 horas antes de la infusión)", level=2)
     doc.add_paragraph("☐ Peso: _________ kg")
     
-    # Cuestionarios
     if proc.get("cuestionarios"):
         doc.add_paragraph("☐ Cuestionarios o PROs (TABLET en armario):").bold = True
         doc.add_paragraph("    ☐ KCCQ-OS\n    ☐ EQ-5D-5L\n    ☐ SF-36\n    ☐ PGIC (EN PAPEL)")
 
-    # Signos Vitales Pre
     if proc.get("signos_vitales"):
         doc.add_paragraph("☐ Signos vitales: (antes de sacar la sangre, tras 5 minutos descanso)").bold = True
         doc.add_paragraph("Medir las constantes en posición de reposo y tras haber estado 5 minutos en reposo.")
@@ -70,33 +88,31 @@ def crear_documento_word_pro(datos_json):
         t_vit_pre.cell(1, 0).text = "Pre-extracción"
         doc.add_paragraph("")
 
-    # ECG Pre
     if proc.get("ecg_pre"):
         doc.add_paragraph("☐ Pre-Electrocardiograma de 12 derivaciones (dentro de las 2h antes)").bold = True
-        doc.add_paragraph("Hacer el ECG después de haber estado en reposo 5 minutos.")
+        doc.add_paragraph(det.get("instrucciones_ecg", "Hacer el ECG después de haber estado en reposo 5 minutos."))
         doc.add_paragraph("    ☐ Posición supino\n    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
 
-    # Analíticas
     if proc.get("laboratorio"):
         doc.add_paragraph("☐ Extraer muestras de sangre y orina (dentro de las 2h antes)").bold = True
-        doc.add_paragraph("5 tubos rojos, 3 dorados, 1 azul y 2 lavanda (EL TUBO ROJO PK EOI ES POST INFUSIÓN)")
+        # AQUÍ SE INYECTAN LOS TUBOS DEL MANUAL DE LABORATORIO
+        tubos = det.get("laboratorio_tubos", "Revisar manual de laboratorio para los tubos.")
+        doc.add_paragraph(f"Tubos a extraer: {tubos}").italic = True
         doc.add_paragraph("☐ Orina")
 
-    # 6MWT
     if proc.get("test_6mwt"):
         doc.add_paragraph("☐ Test de los 6 minutos (6MWT) (después de sangre, antes de infusión)").bold = True
-        doc.add_paragraph("    • Coger material y hoja, escribir en inglés. Realizado por: ________________")
+        doc.add_paragraph(det.get("instrucciones_6mwt", "Coger material y hoja, escribir en inglés."))
+        doc.add_paragraph("    • Realizado por: ________________")
         doc.add_paragraph("    • Rellenar en Course Name: 6MWT 2F; y en Course Lenght: 20m")
         doc.add_paragraph("    • Todas las casillas completas. Si no hiciste alguna: N/D.")
 
-    # INFUSIÓN
     if proc.get("infusion"):
         doc.add_heading("ADMINISTRACIÓN DE INFUSIÓN + SIGNOS VITALES", level=2)
         doc.add_paragraph("*La infusión debe durar 1 hora.\n*No diluir el fármaco\n*Limpiar las vías ANTES y DESPUÉS con dextrosa 5%.\n*Completar el IMP Transfer Log.").italic = True
         doc.add_paragraph("Administración del fármaco:").bold = True
         doc.add_paragraph("1. Revisar visualmente la bolsa. NO SACAR la bolsa de cegado.\n2. Revisar caducidad.\n3. Administrar con filtro de línea de 0.2 micras.\n4. Seguir velocidad de la tabla.\n5. Registrar hora de inicio y brazo. Signos vitales cada 15 min.\n6. Limpiar vía con dextrosa 5% (5 min).\n7. Quitar bolsa.")
         doc.add_paragraph("\n☐ HORA DE INICIO: _________   ☐ HORA DE FIN: _________")
-        doc.add_paragraph("☐ Rellenar IMP transfer log y revisar bolsa de cegado.")
         
         doc.add_paragraph("\nSignos vitales durante la infusión:").bold = True
         t_vit_inf = doc.add_table(rows=6, cols=8)
@@ -109,7 +125,6 @@ def crear_documento_word_pro(datos_json):
         t_vit_inf.cell(5, 0).text = "1h infusión"
         doc.add_paragraph("")
 
-    # POST-INFUSIÓN
     doc.add_heading("POST-INFUSIÓN (30 min)", level=2)
     if proc.get("pk_post"):
         doc.add_paragraph("☐ PK-post infusión: dentro de los 30 min post-infusión.").bold = True
@@ -157,8 +172,8 @@ def crear_documento_word_pro(datos_json):
         doc.add_paragraph("   90% - Actividad normal, con síntomas y signos leves.")
         doc.add_paragraph("   80% - Actividad normal con esfuerzo, síntomas leves.")
         doc.add_paragraph("   70% - Capaz de cuidar de si mismo, pero no realiza trabajo activo.")
-        doc.add_paragraph("   60% - En ocasiones necesita ayuda, pero capaz de cuidarse la mayor parte del tiempo.")
-        doc.add_paragraph("   50% - Necesita atención médica frecuente y ayuda de otros.")
+        doc.add_paragraph("   60% - En ocasiones necesita ayuda, capaz de cuidarse la mayor parte del tiempo.")
+        doc.add_paragraph("   50% - Necesita atención médica y ayuda frecuente.")
         doc.add_paragraph("   40% - Con discapacidad, requiere cuidados especiales.")
         doc.add_paragraph("   30% - Discapacidad grave, en condiciones de hospitalización.")
         doc.add_paragraph("   20% - Enfermo grave, necesita tratamiento activo de sostén.")
@@ -219,25 +234,31 @@ with st.sidebar:
     api_key = st.text_input("Introduce tu API Key:", type="password")
     st.divider()
     modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3.1-flash-lite-preview"])
-    st.caption("v5.0 | Motor de Plantillas Clínicas HUJ")
+    st.caption("v6.0 | Plantillas Exactas + Laboratorio")
 
+# PASO 1 (AQUÍ ESTÁ TU LABORATORIO DE VUELTA)
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE (Las X).</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE y los Manuales de Laboratorio.</div>', unsafe_allow_html=True)
     f_proto = st.file_uploader("1. SUBIR PROTOCOLO (Apartado SoE)", type=["pdf"])
+    f_labs = st.file_uploader("2. SUBIR MANUALES DE LABORATORIO", type=["pdf"], accept_multiple_files=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+# PASO 2 (AQUÍ ESTÁN TUS ASSESSMENTS DE VUELTA)
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">Indica la página y el nombre de la visita a generar.</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     p_tabla = c1.text_input("Páginas de la Tabla SoE (ej. 11-16):", "11-16")
-    v_proto = c2.text_input("Visita en Protocolo (ej. Visit 17):", "Visit 17")
+    v_proto = c1.text_input("Visita en Protocolo (ej. Visit 17):", "Visit 17")
+    p_assessments = c2.text_input("Páginas Study Assessments:", "40-60")
+    v_lab = c2.text_input("Visita en Manual Lab:", "Visit 17")
     st.markdown('</div>', unsafe_allow_html=True)
 
+# PASO 3
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">La IA analizará el protocolo y generará las Hojas de Enfermería y Médica oficiales.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-container"><div class="step-explanation">La IA analizará todo y generará las Hojas oficiales.</div>', unsafe_allow_html=True)
     
     if st.button("✨ Generar Hoja de Visita Oficial HUJ"):
         if not api_key or not f_proto:
@@ -247,37 +268,45 @@ with st.container():
             status_text = st.empty()
             
             try:
-                status_text.text("📖 Leyendo la tabla del protocolo...")
-                t_soe = extraer_texto_paginas(f_proto.read(), p_tabla)
-                barra_progreso.progress(50)
+                status_text.text("📖 Leyendo la tabla del protocolo y los assessments...")
+                p_bytes = f_proto.read()
+                t_soe = extraer_texto_paginas(p_bytes, p_tabla)
+                t_ass = extraer_texto_paginas(p_bytes, p_assessments)
+                barra_progreso.progress(30)
+
+                status_text.text("🧪 Analizando manuales de laboratorio...")
+                t_lab = ""
+                if f_labs:
+                    for f in f_labs:
+                        t_lab += f"\n--- DOC: {f.name} ---\n" + extraer_texto_paginas(f.read(), "")
+                barra_progreso.progress(60)
                 
-                status_text.text("🧠 IA activando los bloques de la plantilla del hospital...")
+                status_text.text("🧠 IA construyendo documento médico a medida...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
-                Eres el Director Médico del ensayo. Analiza la tabla de protocolo proporcionada para la visita '{v_proto}'.
+                Eres el Director Médico del ensayo. Tu tarea es activar las secciones de una plantilla.
+
+                --- LISTA MAESTRA DE PROCEDIMIENTOS ---
+                {PROCEDIMIENTOS_MAESTROS}
                 
-                TABLA SOE: {t_soe}
+                --- TABLA DEL PROTOCOLO (SoE) ---
+                {t_soe}
 
-                Tu única tarea es leer la columna de '{v_proto}' e indicarme qué procedimientos médicos tienen una marca (X, punto, etc).
-                Responde ÚNICAMENTE con un JSON en formato booleano (true si está marcado en la tabla para esa visita, false si no).
+                --- DETALLES TÉCNICOS (STUDY ASSESSMENTS) ---
+                {t_ass}
 
-                Reglas de mapeo para los booleanos:
-                - cuestionarios: true si incluye KCCQ, EQ-5D, SF-36, PGIC o PROs.
-                - signos_vitales: true si incluye Vital signs o BP/HR.
-                - ecg_pre: true si incluye 12-lead ECG.
-                - ecg_post: true si el protocolo indica ECG post-infusión.
-                - test_6mwt: true si incluye 6-minute walk test o 6MWT.
-                - laboratorio: true si incluye clinical laboratory tests, blood, hematology, chemistry, etc.
-                - infusion: true si incluye Study intervention infusion o Study drug administration.
-                - pk_post: true si incluye PK samples o Pharmacokinetic.
-                - eco: true si incluye Echocardiogram.
-                - examen_fisico: true si incluye Physical examination (Full o Symptom-directed).
-                - nyha: true si incluye NYHA Functional Classification.
-                - karnofsky: true si incluye Karnofsky Performance Status score.
+                --- MANUAL DE LABORATORIO ---
+                {t_lab[:80000]}
 
-                Formato estricto de salida:
+                INSTRUCCIONES CRÍTICAS:
+                1. Revisa la columna '{v_proto}' del protocolo. Pon a "true" las secciones de la plantilla si ves la marca.
+                2. NYHA y 6MWT: Si ves estos términos en la tabla o en los detalles, actívalos ("true").
+                3. LABORATORIO: Busca la visita '{v_lab}' en el manual de laboratorio. Extrae exactamente qué tubos, volúmenes y colores se necesitan (ej. "5 tubos rojos, 3 dorados...") y ponlo en "laboratorio_tubos".
+                4. ASSESSMENTS: Extrae detalles específicos del ECG o 6MWT desde el Study Assessments.
+
+                FORMATO JSON ESTRICTO DE SALIDA:
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
@@ -293,6 +322,11 @@ with st.container():
                     "examen_fisico": true|false,
                     "nyha": true|false,
                     "karnofsky": true|false
+                  }},
+                  "detalles": {{
+                    "laboratorio_tubos": "Resumen exacto de los tubos y colores a extraer según el manual...",
+                    "instrucciones_ecg": "Detalles técnicos del ECG extraídos de los Assessments...",
+                    "instrucciones_6mwt": "Detalles técnicos del test de marcha extraídos de los Assessments..."
                   }}
                 }}
                 """
