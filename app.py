@@ -15,10 +15,7 @@ st.set_page_config(page_title="BioCardio Clinical Assistant", page_icon="🏥", 
 
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #f4f7f4;
-    }
-    /* Estilo para las etiquetas de carga de archivos */
+    .stApp { background-color: #f4f7f4; }
     .stFileUploader label {
         font-weight: bold !important;
         color: #1a1a1a !important;
@@ -40,29 +37,14 @@ st.markdown("""
         font-weight: bold;
         margin-top: 15px;
         margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .step-explanation {
-        color: #1a1a1a;
-        font-size: 16px;
-        font-weight: 500;
-        margin-bottom: 20px;
-        font-style: italic;
-        border-bottom: 2px solid #eee;
-        padding-bottom: 10px;
     }
     .stButton>button {
         background-color: #007d32 !important;
         color: white !important;
         border-radius: 12px !important;
-        padding: 15px 30px !important;
+        height: 55px !important;
         font-size: 18px !important;
         font-weight: bold !important;
-        width: 100%;
-        transition: 0.3s;
-        border: none !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -76,10 +58,6 @@ def crear_documento_word_pro(datos_json):
         datos = {"visita": "Error en formato", "procedimientos_finales": []}
 
     doc = Document()
-    style = doc.styles['Normal']
-    style.font.name = 'Calibri'
-    style.font.size = Pt(11)
-    
     doc.add_heading(f"HOJA DE VISITA: {datos.get('visita', 'N/A')}", 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     info_table = doc.add_table(rows=2, cols=2)
@@ -146,34 +124,45 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
         for p in sorted(list(p_set)):
             if 0 < p <= len(doc):
                 texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("text") + "\n"
-    except: texto = "Error en lectura de páginas."
+    except: texto = "Error en lectura."
     return texto
+
+# --- 💉 TEXTO INFUSIÓN COMPLETO (RECUPERADO) ---
+texto_infusion_obligatorio = """*La infusión debe durar 1 hora.
+*No diluir el fármaco.
+*Limpiar las vías ANTES y DESPUÉS de la infusión con dextrosa 5%: Limpiar la vía con dextrosa 5% antes de la infusión solamente si se le ha infundido algún otro fluido o fármaco al paciente. Si la línea de infusión es nueva, no hace falta hacer este lavado previo a la infusión con dextrosa 5%. 
+*Cuando se recoja la medicación de farmacia, se debe completar el IMP Transfer Log, rellenado por farmacia y entregado en el momento de la dispensación, firmado por el equipo unblinded y blinded.
+*Administración del fármaco:
+1. Revisar visualmente la bolsa de infusión que esté enmascarada. NO SACAR la bolsa de cegado. 
+2. Revisar la caducidad de la bolsa de infusión preparada. Si está caducada, no administrar.
+3. Conectar el sistema de tubos de infusión a la bolsa. Recordad que hay administrar el fármaco con un filtro de línea de 0.2 micras.
+4. Conectar el sistema de tubos a la bomba de infusión y seguir la velocidad determinada por la tabla de abajo.
+5. La hora de inicio de la infusión es cuando la bomba ha empezado a infundir. Registrar hora y el brazo. Infundir toda la bolsa. Durante la infusión recoger los signos vitales cada 15 minutos (+- 5 minutos), presión arterial sistólica, diastólica, pulsaciones, respiratory rate, saturación de oxigeno y temperatura.
+6. Limpiar la vía con dextrosa 5% (5 minutos) con la misma velocidad de la medicación.
+7. Quitar la bolsa de infusión. Registrar la hora (incluyendo el flush con dextrosa 5%) en la hoja de administración de la medicación.
+
+☐ Infusión del fármaco → Dosis según el peso del paciente
+□ HORA DE INICIO DE LA INFUSIÓN: ____________
+□ HORA DE FIN DE LA INFUSIÓN: ____________
+□ Rellenar la hoja de administración de la medicación (IMP transfer log). Revisar la bolsa de cegado.
+□ Lavar con 5% dextrosa al final de la infusión."""
 
 # --- 🖥️ INTERFAZ WEB ---
 col_logo, col_titulo = st.columns([1, 5])
 with col_logo:
     try: st.image("huj.png", width=140)
-    except: st.markdown("## 🏥")
+    except: st.title("🏥")
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
-    st.write("Hospital Universitario de Jaén | Gestión de Precisión v3.7")
+    st.write("Hospital Universitario de Jaén | Precisión Garantizada v3.8")
 
-# --- BARRA LATERAL (RECUPERADA) ---
 with st.sidebar:
     st.header("🔑 Configuración")
-    st.markdown("""
-    **¿Cómo obtener tu clave?**
-    1. Entra en [Google AI Studio](https://aistudio.google.com/app/apikey).
-    2. Pulsa en **"Create API Key"**.
-    3. Copia el código y pégalo aquí abajo:
-    """)
-    api_key = st.text_input("Introduce tu API Key personal:", type="password")
-    
-    st.divider()
-    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3-flash"], help="Modelo optimizado para máxima precisión y velocidad.")
-    st.info("Nota: Los documentos subidos se borran automáticamente al cerrar la sesión.")
+    st.markdown("Obtén tu clave en [Google AI Studio](https://aistudio.google.com/app/apikey)")
+    api_key = st.text_input("Introduce API Key:", type="password")
+    # MODELO CORREGIDO A NOMBRE OFICIAL
+    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-1.5-flash", "gemini-1.5-pro"])
 
-# PASOS
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">Sube el Protocolo y los Manuales de Laboratorio:</div>', unsafe_allow_html=True)
@@ -185,17 +174,17 @@ st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</
 with st.container():
     st.markdown('<div class="step-container"><div class="step-explanation">Define las páginas y la visita exacta:</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    p_tabla = c1.text_input("Páginas SoE (Tabla):")
-    v_proto = c1.text_input("Nombre Visita en Tabla:")
-    p_assessments = c2.text_input("Páginas Study Assessments:")
-    v_lab = c2.text_input("Nombre Visita en Lab:")
+    p_tabla = c1.text_input("Páginas SoE (Tabla):", "11-16")
+    v_proto = c1.text_input("Nombre Visita en Tabla:", "Visit 17")
+    p_assessments = c2.text_input("Páginas Study Assessments:", "40-60")
+    v_lab = c2.text_input("Nombre Visita en Lab:", "Visit 17")
     st.markdown('</div>', unsafe_allow_html=True)
 
-if st.button("GENERAR HOJA DE VISITA SIN OMISIONES"):
+if st.button("✨ GENERAR HOJA DE VISITA"):
     if not api_key or not f_proto:
-        st.error("⚠️ Debes introducir la API Key y subir el Protocolo.")
+        st.error("Faltan datos.")
     else:
-        with st.spinner("Escaneando tabla minuciosamente..."):
+        with st.spinner("Analizando datos..."):
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
@@ -204,20 +193,18 @@ if st.button("GENERAR HOJA DE VISITA SIN OMISIONES"):
                 t_ass = extraer_texto_paginas(p_bytes, p_assessments)
                 
                 prompt = f"""
-                Misión: Traslada TODA la información de la columna '{v_proto}' sin omitir ni un solo punto.
+                Misión: Traslada TODA la información de la columna '{v_proto}' sin omitir nada.
                 
                 TABLA SOE: {t_soe}
                 DETALLES TÉCNICOS: {t_ass}
 
-                REGLAS DE ORO:
-                1. Escanea la columna '{v_proto}' de arriba a abajo. Cualquier fila con una marca (X, punto, asterisco) DEBE incluirse.
-                2. ES OBLIGATORIO incluir (si están marcados): 6-Minute Walk Test, NYHA Class, Physical Exam, Medical Review, Echocardiogram.
-                3. Si el término '6-minute' o 'walk' aparece en las páginas de la tabla, inclúyelo obligatoriamente en 'pre_dosis'.
-                4. No resumas nombres. Extrae detalles de 'Study Assessments'.
+                REGLAS:
+                1. Busca la columna '{v_proto}'. Si hay marca, incluye el procedimiento.
+                2. NO OLVIDES: '6-minute walk test', 'NYHA class', 'Physical Exam', 'Medical Review', 'Echocardiogram'.
+                3. Si hay infusión, añade este bloque: {texto_infusion_obligatorio}
                 
                 JSON: {{ "visita": "{v_proto}", "procedimientos_finales": [...] }}
                 """
                 res = model.generate_content(prompt)
                 st.download_button("⬇️ DESCARGAR WORD", crear_documento_word_pro(res.text), f"Checklist_{v_proto}.docx")
-                st.success("✅ ¡Generado! Ya puedes descargar.")
             except Exception as e: st.error(f"Error: {e}")
