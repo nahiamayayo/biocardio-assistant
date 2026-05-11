@@ -5,207 +5,182 @@ import google.generativeai as genai
 import io
 import json
 import re
-import time
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-# --- 🎨 CONFIGURACIÓN DE PÁGINA Y ESTILOS (VERDE MÉDICO HUJ) ---
+# --- 🎨 CONFIGURACIÓN DE PÁGINA Y ESTILOS ---
 st.set_page_config(page_title="BioCardio Clinical Assistant", page_icon="🏥", layout="wide")
 
 st.markdown("""
     <style>
-    /* Fondo principal y fuentes */
-    .stApp {
-        background-color: #f4f7f4;
-    }
-    /* Estilo de las etiquetas de los cargadores (Paso 1) */
-    .stFileUploader label {
-        font-weight: bold !important;
-        color: #1a1a1a !important;
-        font-size: 19px !important;
-        display: block;
-        margin-bottom: 12px !important;
-    }
-    /* Estilo de los contenedores de pasos (Tarjetas) */
-    .step-container {
-        background-color: white;
-        padding: 25px 30px;
-        border-radius: 15px;
-        border-left: 8px solid #007d32;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        margin-bottom: 35px;
-    }
-    /* Títulos FUERA de la tarjeta */
-    .step-header {
-        color: #007d32;
-        font-size: 24px;
-        font-weight: bold;
-        margin-top: 15px;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    /* Explicación DENTRO de la tarjeta */
-    .step-explanation {
-        color: #555;
-        font-size: 16px;
-        margin-bottom: 20px;
-        font-style: italic;
-        border-bottom: 1px solid #e0e0e0;
-        padding-bottom: 10px;
-    }
-    /* Botón principal estilizado */
-    .stButton>button {
-        background-color: #007d32 !important;
-        color: white !important;
-        border-radius: 12px !important;
-        padding: 15px 30px !important;
-        font-size: 18px !important;
-        font-weight: bold !important;
-        width: 100%;
-        transition: 0.3s;
-        border: none !important;
-    }
-    .stButton>button:hover {
-        background-color: #005a24 !important;
-        box-shadow: 0 4px 15px rgba(0,125,50,0.3);
-    }
+    .stApp { background-color: #f4f7f4; }
+    .stFileUploader label { font-weight: bold !important; color: #1a1a1a !important; font-size: 19px !important; display: block; margin-bottom: 12px !important; }
+    .step-container { background-color: white; padding: 25px 30px; border-radius: 15px; border-left: 8px solid #007d32; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 35px; }
+    .step-header { color: #007d32; font-size: 24px; font-weight: bold; margin-top: 15px; margin-bottom: 10px; }
+    .step-explanation { color: #555; font-size: 16px; margin-bottom: 20px; font-style: italic; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
+    .stButton>button { background-color: #007d32 !important; color: white !important; border-radius: 12px !important; padding: 15px 30px !important; font-size: 18px !important; font-weight: bold !important; width: 100%; transition: 0.3s; border: none !important; }
+    .stButton>button:hover { background-color: #005a24 !important; box-shadow: 0 4px 15px rgba(0,125,50,0.3); }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 📋 LISTA MAESTRA (ONTOLOGÍA CERRADA) ---
-PROCEDIMIENTOS_MAESTROS = """
-1. Informed consent / Eligibility assessment
-2. Patient identification number / Demographics
-3. Inclusion/exclusion criteria / Mixed phenotype diagnosis
-4. Medical history / Prior medications, therapies, and procedures
-5. Full physical examination / Symptom-directed physical examination
-6. Height and body weight
-7. Karnofsky Performance Status score
-8. NYHA Functional Classification / NYHA class
-9. 6-Minute Walk Test (6MWT)
-10. Vital signs
-11. 12-lead ECG (Single or Triplicate)
-12. Echocardiogram
-13. Cardiac scintigraphy / Cardiac MRI
-14. PND score / FAP stage
-15. Neurological assessments: NC studies, NIS, NIS-LL, LLF test
-16. Norfolk-QoL-DN / KCCQ / KCCQ-OS / EQ-5D-5L / SF-36 / PGIC
-17. Central clinical laboratory tests (Serum chemistry, hematology, urinalysis, coagulation, LFTs)
-18. Local platelet count
-19. sFLC, sIFE, and uIFE
-20. Cardiac Biomarker Samples (NfL, sNfL, CRP, hs-cTnT, NT-proBNP)
-21. FSH screening / Serum or Urine pregnancy test
-22. TTR genotyping / Tissue biopsy
-23. Pharmacodynamic Assessments (TTR protein, vitamin A levels)
-24. Additional biomarkers for further research (optional future research samples)
-25. Pharmacokinetic (PK) samples / plasma pk
-26. Immunogenicity (ADA) samples
-27. Review/Record Hospitalizations, Urgent HF Visits, and Procedures
-28. Check-in contact / Vital status check
-29. Concomitant Medications / Adverse events (AEs)
-30. Randomization
-31. Study intervention infusion / Study drug administration
-"""
-
-# --- 📄 GENERADOR DEL WORD ---
+# --- 📄 GENERADOR DEL WORD (PLANTILLA EXACTA HUJ) ---
 def crear_documento_word_pro(datos_json):
     try:
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
         datos = json.loads(match.group(0)) if match else json.loads(datos_json)
     except Exception as e:
-        datos = {"visita": "Error en formato", "procedimientos_finales": []}
+        datos = {"visita": "Error", "procedimientos": {}}
 
+    proc = datos.get("procedimientos", {})
     doc = Document()
+    
+    # Estilos Base
     style = doc.styles['Normal']
     style.font.name = 'Calibri'
-    style.font.size = Pt(11)
-    style.font.color.rgb = RGBColor(0, 0, 0) 
+    style.font.size = Pt(10)
     
-    for i in range(1, 4):
-        if f'Heading {i}' in doc.styles:
-            h_style = doc.styles[f'Heading {i}']
-            h_style.font.name = 'Calibri'
-            h_style.font.color.rgb = RGBColor(0, 0, 0)
-
-    doc.add_heading(f"HOJA DE VISITA: {datos.get('visita', 'N/A')}", 0).alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    info_table = doc.add_table(rows=2, cols=2)
-    info_table.cell(0, 0).text = "Protocolo / Centro:\n_________________________"
-    info_table.cell(0, 1).text = "ID del Paciente / Iniciales:\n_________________________"
+    # ==========================================
+    # PÁGINA 1: HOJA DE ENFERMERÍA
+    # ==========================================
+    doc.add_heading(f"HOJA DE ENFERMERÍA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f"Protocolo: {datos.get('protocolo', 'ALXN2220-ATTR-CM-301')}     ID: ______________").bold = True
     
-    doc.add_paragraph("\n⚠️ NOTA: Si el paciente no acude a la visita, rellenar igualmente el eCRF.").runs[0].bold = True
+    doc.add_heading("PRIMEROS PASOS", level=2)
+    doc.add_paragraph("☐ Registrar visita para asignar infusión al paciente en Almac (IXRS)")
+    doc.add_paragraph("☐ Fecha de la visita: ______________")
+    doc.add_paragraph("*Si no viene a la visita también rellenar CRF\n").italic = True
+    
+    doc.add_heading("PRE-INFUSIÓN (dentro de las 2 horas antes de la infusión)", level=2)
+    doc.add_paragraph("☐ Peso: _________ kg")
+    
+    # Cuestionarios
+    if proc.get("cuestionarios"):
+        doc.add_paragraph("☐ Cuestionarios o PROs (TABLET en armario):").bold = True
+        doc.add_paragraph("    ☐ KCCQ-OS\n    ☐ EQ-5D-5L\n    ☐ SF-36\n    ☐ PGIC (EN PAPEL)")
 
-    procedimientos = datos.get("procedimientos_finales", [])
+    # Signos Vitales Pre
+    if proc.get("signos_vitales"):
+        doc.add_paragraph("☐ Signos vitales: (antes de sacar la sangre, tras 5 minutos descanso)").bold = True
+        doc.add_paragraph("Medir las constantes en posición de reposo y tras haber estado 5 minutos en reposo.")
+        t_vit_pre = doc.add_table(rows=2, cols=8)
+        t_vit_pre.style = 'Table Grid'
+        hdr = ["Tiempo", "Hora", "PA Sist.", "PA Diast.", "Pulso", "Resp.", "O2 (%)", "Ta (ºC)"]
+        for i, h in enumerate(hdr): t_vit_pre.cell(0, i).text = h
+        t_vit_pre.cell(1, 0).text = "Pre-extracción"
+        doc.add_paragraph("")
 
-    categorias_ordenadas = [
-        ("PRE-DOSIS / PRE-INFUSIÓN", "pre_dosis"),
-        ("EXTRACCIONES DE LABORATORIO CENTRAL", "laboratorio"),
-        ("ADMINISTRACIÓN DE TRATAMIENTO / INFUSIÓN", "administracion"),
-        ("POST-DOSIS / SEGUIMIENTO", "post_dosis"),
-        ("PROCEDIMIENTOS CONTINUOS", "continuos"),
-        ("OTROS PROCEDIMIENTOS", "general")
-    ]
+    # ECG Pre
+    if proc.get("ecg_pre"):
+        doc.add_paragraph("☐ Pre-Electrocardiograma de 12 derivaciones (dentro de las 2h antes)").bold = True
+        doc.add_paragraph("Hacer el ECG después de haber estado en reposo 5 minutos.")
+        doc.add_paragraph("    ☐ Posición supino\n    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
 
-    if procedimientos:
-        for titulo_cat, id_cat in categorias_ordenadas:
-            items = [p for p in procedimientos if p.get("categoria") == id_cat]
-            if items:
-                doc.add_heading(titulo_cat, level=1)
-                for item in items:
-                    p = doc.add_paragraph()
-                    p.add_run(f"[  ] {item.get('procedimiento')} ").bold = True
-                    
-                    proc_nombre = item.get('procedimiento', '').lower()
+    # Analíticas
+    if proc.get("laboratorio"):
+        doc.add_paragraph("☐ Extraer muestras de sangre y orina (dentro de las 2h antes)").bold = True
+        doc.add_paragraph("5 tubos rojos, 3 dorados, 1 azul y 2 lavanda (EL TUBO ROJO PK EOI ES POST INFUSIÓN)")
+        doc.add_paragraph("☐ Orina")
 
-                    # --- INYECCIÓN ESPECIAL: ECG ---
-                    if "ecg" in proc_nombre or "electrocardiograma" in proc_nombre:
-                        ecg_p = doc.add_paragraph()
-                        ecg_p.paragraph_format.left_indent = Pt(20)
-                        ecg_p.add_run("• Posición supino\n• Frecuencia cardíaca: ..........\n• PR: ..........\n• QRS: ..........\n• QT: ..........\n• QTc: ..........")
+    # 6MWT
+    if proc.get("test_6mwt"):
+        doc.add_paragraph("☐ Test de los 6 minutos (6MWT) (después de sangre, antes de infusión)").bold = True
+        doc.add_paragraph("    • Coger material y hoja, escribir en inglés. Realizado por: ________________")
+        doc.add_paragraph("    • Rellenar en Course Name: 6MWT 2F; y en Course Lenght: 20m")
+        doc.add_paragraph("    • Todas las casillas completas. Si no hiciste alguna: N/D.")
 
-                    # --- INYECCIÓN ESPECIAL: NYHA ---
-                    if "nyha" in proc_nombre:
-                        nyha_p = doc.add_paragraph()
-                        nyha_p.paragraph_format.left_indent = Pt(20)
-                        nyha_p.add_run("• Clasificación NYHA:  I [ ]   II [ ]   III [ ]   IV [ ]").bold = True
+    # INFUSIÓN
+    if proc.get("infusion"):
+        doc.add_heading("ADMINISTRACIÓN DE INFUSIÓN + SIGNOS VITALES", level=2)
+        doc.add_paragraph("*La infusión debe durar 1 hora.\n*No diluir el fármaco\n*Limpiar las vías ANTES y DESPUÉS con dextrosa 5%.\n*Completar el IMP Transfer Log.").italic = True
+        doc.add_paragraph("Administración del fármaco:").bold = True
+        doc.add_paragraph("1. Revisar visualmente la bolsa. NO SACAR la bolsa de cegado.\n2. Revisar caducidad.\n3. Administrar con filtro de línea de 0.2 micras.\n4. Seguir velocidad de la tabla.\n5. Registrar hora de inicio y brazo. Signos vitales cada 15 min.\n6. Limpiar vía con dextrosa 5% (5 min).\n7. Quitar bolsa.")
+        doc.add_paragraph("\n☐ HORA DE INICIO: _________   ☐ HORA DE FIN: _________")
+        doc.add_paragraph("☐ Rellenar IMP transfer log y revisar bolsa de cegado.")
+        
+        doc.add_paragraph("\nSignos vitales durante la infusión:").bold = True
+        t_vit_inf = doc.add_table(rows=6, cols=8)
+        t_vit_inf.style = 'Table Grid'
+        for i, h in enumerate(hdr): t_vit_inf.cell(0, i).text = h
+        t_vit_inf.cell(1, 0).text = "15 min antes"
+        t_vit_inf.cell(2, 0).text = "15 min infusión"
+        t_vit_inf.cell(3, 0).text = "30 min infusión"
+        t_vit_inf.cell(4, 0).text = "45 min infusión"
+        t_vit_inf.cell(5, 0).text = "1h infusión"
+        doc.add_paragraph("")
 
-                    # --- INYECCIÓN ESPECIAL: TEST DE 6 MINUTOS ---
-                    if any(x in proc_nombre for x in ["6 min", "6-min", "6mwt", "walk", "marcha"]):
-                        test_p = doc.add_paragraph()
-                        test_p.paragraph_format.left_indent = Pt(20)
-                        test_p.add_run("(después de sangre y cuestionarios, pero antes de la infusión)\n").italic = True
-                        test_p.add_run("• Coger material y hoja, escribir en inglés en la hoja → realizado por: ________________\n")
-                        test_p.add_run("• Rellenar en Course Name: 6MWT 2F; y en Course Lenght: 20m\n")
-                        test_p.add_run("• Todas las casillas deben estar completas. Si no hiciste alguna casilla poner: N/D.")
+    # POST-INFUSIÓN
+    doc.add_heading("POST-INFUSIÓN (30 min)", level=2)
+    if proc.get("pk_post"):
+        doc.add_paragraph("☐ PK-post infusión: dentro de los 30 min post-infusión.").bold = True
+        doc.add_paragraph("Sacar la muestra del brazo opuesto de la infusión.")
+    
+    if proc.get("ecg_post"):
+        doc.add_paragraph("☐ Post-Electrocardiograma: dentro de los 30 min post-infusion y 5m reposo.").bold = True
+        doc.add_paragraph("    ☐ Posición supino\n    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
+        
+    if proc.get("signos_vitales"):
+        t_vit_post = doc.add_table(rows=2, cols=8)
+        t_vit_post.style = 'Table Grid'
+        for i, h in enumerate(hdr): t_vit_post.cell(0, i).text = h
+        t_vit_post.cell(1, 0).text = "30 min post"
+        doc.add_paragraph("")
 
-                    if item.get("detalles"):
-                        det_p = doc.add_paragraph(item.get("detalles"))
-                        det_p.paragraph_format.left_indent = Pt(20)
+    if proc.get("eco"):
+        doc.add_paragraph("☐ Ecocardiograma (dejar instrucciones) → realizado por ____________").bold = True
 
-                    tiempos = item.get("tiempos_especificos", [])
-                    if "signos vitales" in proc_nombre or "vital signs" in proc_nombre:
-                        if not tiempos:
-                            tiempos = ["________________", "________________"]
-                        table = doc.add_table(rows=len(tiempos)+1, cols=8)
-                        table.style = 'Table Grid'
-                        headers = ["Tiempo", "Hora", "PA Sist.", "PA Diast.", "Pulso", "Resp", "O2 (%)", "Temp."]
-                        for i, head in enumerate(headers):
-                            table.cell(0, i).text = head
-                            table.cell(0, i).paragraphs[0].runs[0].bold = True
-                        for i, t_val in enumerate(tiempos):
-                            table.cell(i+1, 0).text = t_val
+    doc.add_paragraph("\n☐ Envío de muestras (hora: de 11:00 a 13:30)")
+    doc.add_paragraph("\nFirmado: _______________________      Fecha: ______________")
 
-                    if id_cat == "laboratorio":
-                        chk = doc.add_paragraph("   [  ] Muestra extraída y procesada según el manual de laboratorio\n   [  ] Muestra enviada o almacenada correctamente al laboratorio central")
-                        chk.paragraph_format.left_indent = Pt(20)
+    # ==========================================
+    # PÁGINA 2: HOJA MÉDICA
+    # ==========================================
+    doc.add_page_break()
+    doc.add_heading(f"HOJA MÉDICA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_paragraph(f"Protocolo: {datos.get('protocolo', 'ALXN2220-ATTR-CM-301')}     ID: ______________").bold = True
+    doc.add_paragraph("☐ Fecha de la visita: ______________\n")
 
-    doc.add_paragraph("\n\n")
-    firma_table = doc.add_table(rows=1, cols=2)
-    firma_table.cell(0, 0).text = "Firma del Investigador / Enfermería:\n\n___________________________"
-    firma_table.cell(0, 1).text = "Fecha:\n\n___________________________"
+    if proc.get("examen_fisico"):
+        doc.add_paragraph("☐ Examen físico completo").bold = True
+        doc.add_paragraph("(Ver aspecto general, piel, nariz, orejas, ojos, cuello, garganta, corazón, abdomen, pulmones, sistema vascular, sistema nervioso, sistema musculo esquelético y extremidades)\n")
+
+    if proc.get("nyha"):
+        doc.add_paragraph("☐ Clasificación funcional NYHA (seleccionar una):").bold = True
+        doc.add_paragraph("   ☐ NYHA I: Asintomático")
+        doc.add_paragraph("   ☐ NYHA II: Falta de aire (disnea) a grandes esfuerzos")
+        doc.add_paragraph("   ☐ NYHA III: Falta de aire (disnea) a pequeños esfuerzos")
+        doc.add_paragraph("   ☐ NYHA IV: Falta de aire (disnea) en reposo (se ahoga estando quieto)\n")
+
+    if proc.get("karnofsky"):
+        doc.add_paragraph("☐ Discapacidad (con escala Karnofsky):").bold = True
+        doc.add_paragraph("   100% - Actividad normal (capaz de desempeñar actividades), asintomático.")
+        doc.add_paragraph("   90% - Actividad normal, con síntomas y signos leves.")
+        doc.add_paragraph("   80% - Actividad normal con esfuerzo, síntomas leves.")
+        doc.add_paragraph("   70% - Capaz de cuidar de si mismo, pero no realiza trabajo activo.")
+        doc.add_paragraph("   60% - En ocasiones necesita ayuda, pero capaz de cuidarse la mayor parte del tiempo.")
+        doc.add_paragraph("   50% - Necesita atención médica frecuente y ayuda de otros.")
+        doc.add_paragraph("   40% - Con discapacidad, requiere cuidados especiales.")
+        doc.add_paragraph("   30% - Discapacidad grave, en condiciones de hospitalización.")
+        doc.add_paragraph("   20% - Enfermo grave, necesita tratamiento activo de sostén.")
+        doc.add_paragraph("   10% - Paciente decaído o moribundo.")
+        doc.add_paragraph("   0% - Paciente fallecido.\n")
+
+    doc.add_paragraph("☐ Medicamentos, terapias o procedimientos simultáneos").bold = True
+    doc.add_paragraph("☐ Eventos adversos (AEs)\n").bold = True
+
+    if proc.get("ecg_pre"):
+        doc.add_paragraph("☐ Pre-Electrocardiograma de 12 derivaciones").bold = True
+        doc.add_paragraph("   ☐ Significancia clínica: _________________________________________")
+
+    if proc.get("ecg_post"):
+        doc.add_paragraph("☐ Post-Electrocardiograma de 12 derivaciones").bold = True
+        doc.add_paragraph("   ☐ Significancia clínica: _________________________________________")
+
+    if proc.get("infusion"):
+        doc.add_paragraph("\n☐ Examen físico breve post infusión:").bold = True
+        doc.add_paragraph("Inclusive of general appearance, heart, lungs, skin, musculoskeletal system and extremities and other organs or body systems as clinically indicated should be performed prior to the participant's discharge.")
+
+    doc.add_paragraph("\n\nFirmado (Médico): _______________________      Fecha: ______________")
 
     buffer = io.BytesIO()
     doc.save(buffer)
@@ -216,182 +191,125 @@ def crear_documento_word_pro(datos_json):
 def extraer_texto_paginas(pdf_bytes, paginas_str=""):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texto = ""
-    paginas_a_leer = []
-    if paginas_str:
+    try:
         p_set = set()
         for b in paginas_str.split(','):
             if '-' in b:
                 s, e = b.split('-')
                 p_set.update(range(int(s), int(e)+1))
             else: p_set.add(int(b))
-        paginas_a_leer = sorted(list(p_set))
-    else:
-        paginas_a_leer = range(1, len(doc) + 1)
-
-    for p in paginas_a_leer:
-        if 0 < p <= len(doc):
-            page = doc[p-1]
-            try: texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("markdown") + "\n"
-            except: texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("text") + "\n"
+        for p in sorted(list(p_set)):
+            if 0 < p <= len(doc):
+                texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("text") + "\n"
+    except: texto = "Error en lectura."
     return texto
 
-# --- 💉 TEXTO INFUSIÓN COMPLETO ---
-texto_infusion_obligatorio = """*La infusión debe durar 1 hora.
-*No diluir el fármaco.
-*Limpiar las vías ANTES y DESPUÉS de la infusión con dextrosa 5%: Limpiar la vía con dextrosa 5% antes de la infusión solamente si se le ha infundido algún otro fluido o fármaco al paciente. Si la línea de infusión es nueva, no hace falta hacer este lavado previo a la infusión con dextrosa 5%. 
-*Cuando se recoja la medicación de farmacia, se debe completar el IMP Transfer Log, rellenado por farmacia y entregado en el momento de la dispensación, firmado por el equipo unblinded y blinded.
-*Administración del fármaco:
-1. Revisar visualmente la bolsa de infusión que esté enmascarada. NO SACAR la bolsa de cegado. 
-2. Revisar la caducidad de la bolsa de infusión preparada. Si está caducada, no administrar.
-3. Conectar el sistema de tubos de infusión a la bolsa. Recordad que hay administrar el fármaco con un filtro de línea de 0.2 micras.
-4. Conectar el sistema de tubos a la bomba de infusión y seguir la velocidad determinada por la tabla de abajo.
-5. La hora de inicio de la infusión es cuando la bomba ha empezado a infundir. Registrar hora y el brazo. Infundir toda la bolsa. Durante la infusión recoger los signos vitales cada 15 minutos (+- 5 minutos), presión arterial sistólica, diastólica, pulsaciones, respiratory rate, saturación de oxigeno y temperatura.
-6. Limpiar la vía con dextrosa 5% (5 minutos) con la misma velocidad de la medicación.
-7. Quitar la bolsa de infusión. Registrar la hora (incluyendo el flush con dextrosa 5%) en la hoja de administración de la medicación.
-
-☐ Infusión del fármaco → Dosis según el peso del paciente
-□ HORA DE INICIO DE LA INFUSIÓN: ____________
-□ HORA DE FIN DE LA INFUSIÓN: ____________
-□ Rellenar la hoja de administración de la medicación (IMP transfer log). Revisar la bolsa de cegado.
-□ Lavar con 5% dextrosa al final de la infusión."""
-
-# --- 🖥️ INTERFAZ WEB STREAMLIT ---
-
-# Cabecera
+# --- 🖥️ INTERFAZ WEB ---
 col_logo, col_titulo = st.columns([1, 5])
 with col_logo:
-    try:
-        st.image("huj.png", width=140)
-    except:
-        st.markdown("## 🏥")
-
+    try: st.image("huj.png", width=140)
+    except: st.title("🏥")
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
 
-st.divider()
-
-# Sidebar
 with st.sidebar:
     st.markdown("### 🔑 Acceso")
-    st.markdown("""
-    Para utilizar la IA, necesitas una **API Key personal**. 
-    Puedes generarla gratuitamente en:
-    [Google AI Studio ↗](https://aistudio.google.com/app/apikey)
-    """)
+    st.markdown("Obtén tu clave en [Google AI Studio ↗](https://aistudio.google.com/app/apikey)")
     api_key = st.text_input("Introduce tu API Key:", type="password")
-    
     st.divider()
-    modelo_seleccionado = st.selectbox("Modelo de Inteligencia Artificial:", ["gemini-3.1-flash-lite-preview"], help="Modelo optimizado para protocolos médicos.")
-    
-    st.divider()
-    st.caption("v4.0 | Lista Maestra Integrada")
+    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3.1-flash-lite-preview"])
+    st.caption("v5.0 | Motor de Plantillas Clínicas HUJ")
 
-# Paso 1
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown("""
-    <div class="step-container">
-        <div class="step-explanation">Carga el Protocolo SoE y los manuales de laboratorio para empezar.</div>
-    """, unsafe_allow_html=True)
-    
-    f_proto = st.file_uploader("Protocolo del Ensayo (SoE)", type=["pdf"])
-    f_labs = st.file_uploader("Manuales o Logs de Laboratorio (Puedes adjuntar varios)", type=["pdf"], accept_multiple_files=True)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE (Las X).</div>', unsafe_allow_html=True)
+    f_proto = st.file_uploader("1. SUBIR PROTOCOLO (Apartado SoE)", type=["pdf"])
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Paso 2
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown("""
-    <div class="step-container">
-        <div class="step-explanation">Indica las páginas de la tabla de procedimientos (SoE) y los detalles técnicos (Study Assessments).</div>
-    """, unsafe_allow_html=True)
-    
+    st.markdown('<div class="step-container"><div class="step-explanation">Indica la página y el nombre de la visita a generar.</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    with c1:
-        p_tabla = st.text_input("Páginas de la Tabla SoE (ej. 11-16):")
-        v_proto = st.text_input("Visita en Protocolo (ej. Visit 10):")
-    with c2:
-        p_assessments = st.text_input("Páginas Study Assessments (ej. 40-60):")
-        v_lab = st.text_input("Visita en Manual Lab (ej. Visit 10):")
-        
-    st.markdown("</div>", unsafe_allow_html=True)
+    p_tabla = c1.text_input("Páginas de la Tabla SoE (ej. 11-16):", "11-16")
+    v_proto = c2.text_input("Visita en Protocolo (ej. Visit 17):", "Visit 17")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Paso 3
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown("""
-    <div class="step-container">
-        <div class="step-explanation">Procesa la información y genera el documento oficial de enfermería/médico.</div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="step-container"><div class="step-explanation">La IA analizará el protocolo y generará las Hojas de Enfermería y Médica oficiales.</div>', unsafe_allow_html=True)
     
-    if st.button("Generar Hoja de Visita Profesional"):
-        if not api_key:
-            st.error("⚠️ Introduce la API Key en el menú lateral.")
-        elif not f_proto:
-            st.error("⚠️ Adjunta al menos el protocolo (SoE).")
+    if st.button("✨ Generar Hoja de Visita Oficial HUJ"):
+        if not api_key or not f_proto:
+            st.error("⚠️ Faltan documentos o la API Key.")
         else:
             barra_progreso = st.progress(0)
             status_text = st.empty()
             
             try:
-                status_text.text("📖 Leyendo tablas y procedimientos del protocolo...")
-                p_bytes = f_proto.read()
-                texto_tabla_proto = extraer_texto_paginas(p_bytes, p_tabla)
-                texto_assessments = extraer_texto_paginas(p_bytes, p_assessments)
-                barra_progreso.progress(30)
+                status_text.text("📖 Leyendo la tabla del protocolo...")
+                t_soe = extraer_texto_paginas(f_proto.read(), p_tabla)
+                barra_progreso.progress(50)
                 
-                status_text.text("🧪 Analizando documentos de laboratorio...")
-                texto_laboratorios = ""
-                if f_labs:
-                    for f in f_labs:
-                        texto_laboratorios += f"\n--- DOC: {f.name} ---\n" + extraer_texto_paginas(f.read(), "")
-                barra_progreso.progress(60)
-                
-                status_text.text("🧠 IA cruzando tabla con la Lista Maestra...")
+                status_text.text("🧠 IA activando los bloques de la plantilla del hospital...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
-                Eres un Data Manager Clínico de nivel experto. No debes "adivinar" procedimientos. Tu trabajo es verificar una Lista Maestra contra la tabla SoE para la visita '{v_proto}'.
+                Eres el Director Médico del ensayo. Analiza la tabla de protocolo proporcionada para la visita '{v_proto}'.
+                
+                TABLA SOE: {t_soe}
 
-                --- LISTA MAESTRA DE PROCEDIMIENTOS POSIBLES ---
-                {PROCEDIMIENTOS_MAESTROS}
+                Tu única tarea es leer la columna de '{v_proto}' e indicarme qué procedimientos médicos tienen una marca (X, punto, etc).
+                Responde ÚNICAMENTE con un JSON en formato booleano (true si está marcado en la tabla para esa visita, false si no).
 
-                --- TEXTO DE LA TABLA DEL PROTOCOLO (SoE) ---
-                {texto_tabla_proto}
+                Reglas de mapeo para los booleanos:
+                - cuestionarios: true si incluye KCCQ, EQ-5D, SF-36, PGIC o PROs.
+                - signos_vitales: true si incluye Vital signs o BP/HR.
+                - ecg_pre: true si incluye 12-lead ECG.
+                - ecg_post: true si el protocolo indica ECG post-infusión.
+                - test_6mwt: true si incluye 6-minute walk test o 6MWT.
+                - laboratorio: true si incluye clinical laboratory tests, blood, hematology, chemistry, etc.
+                - infusion: true si incluye Study intervention infusion o Study drug administration.
+                - pk_post: true si incluye PK samples o Pharmacokinetic.
+                - eco: true si incluye Echocardiogram.
+                - examen_fisico: true si incluye Physical examination (Full o Symptom-directed).
+                - nyha: true si incluye NYHA Functional Classification.
+                - karnofsky: true si incluye Karnofsky Performance Status score.
 
-                --- TEXTO DE DETALLES TÉCNICOS (STUDY ASSESSMENTS) ---
-                {texto_assessments}
-
-                --- TEXTO DE LOS DOCUMENTOS DE LABORATORIO ---
-                {texto_laboratorios[:100000]}
-
-                INSTRUCCIONES CRÍTICAS (SISTEMA CERRADO):
-                1. REVISA LA LISTA MAESTRA: Lee cada uno de los 31 procedimientos de la Lista Maestra y busca en la columna '{v_proto}' del protocolo. Si ves una marca (X, punto, etc.) en esa fila, cópialo EXACTAMENTE con el nombre de la Lista Maestra.
-                2. NYHA Y 6MWT: Al ser elementos de la Lista Maestra, búscalos exhaustivamente. Si están sombreados o marcados, inclúyelos.
-                3. DETALLES: Usa el texto de 'STUDY ASSESSMENTS' para rellenar la clave 'detalles' de lo que encuentres.
-                4. LABORATORIO: Busca '{v_lab}' en el texto de lab. Crea UN BLOQUE INDIVIDUAL para cada analito con "Panel: [Nombre], Tubo: [Volumen] [COLOR]".
-                5. INFUSIÓN: Si 'Study intervention infusion' o 'Study drug administration' está marcado, añade esto en 'administracion': {texto_infusion_obligatorio}
-
-                JSON DE SALIDA:
-                {{ "visita": "{v_proto}", "procedimientos_finales": [ {{"procedimiento": "Nombre de la Lista Maestra", "categoria": "pre_dosis|laboratorio|administracion|post_dosis|continuos|general", "detalles": "...", "tiempos_especificos": []}} ] }}
+                Formato estricto de salida:
+                {{
+                  "visita": "{v_proto}",
+                  "procedimientos": {{
+                    "cuestionarios": true|false,
+                    "signos_vitales": true|false,
+                    "ecg_pre": true|false,
+                    "ecg_post": true|false,
+                    "test_6mwt": true|false,
+                    "laboratorio": true|false,
+                    "infusion": true|false,
+                    "pk_post": true|false,
+                    "eco": true|false,
+                    "examen_fisico": true|false,
+                    "nyha": true|false,
+                    "karnofsky": true|false
+                  }}
+                }}
                 """
                 
                 res = model.generate_content(prompt)
                 doc_word = crear_documento_word_pro(res.text)
                 
                 barra_progreso.progress(100)
-                status_text.success("✅ Análisis completo. Estandarización aplicada.")
+                status_text.success("✅ Documentos médicos oficiales generados con éxito.")
                 
                 st.download_button(
                     label="⬇️ Descargar Documento Word",
                     data=doc_word,
-                    file_name=f"Checklist_{v_proto.replace(' ','_')}.docx",
+                    file_name=f"Hojas_Oficiales_{v_proto.replace(' ','_')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error técnico: {e}")
                 
     st.markdown("</div>", unsafe_allow_html=True)
