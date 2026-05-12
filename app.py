@@ -230,7 +230,7 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
     buffer.seek(0)
     return buffer
 
-# --- 🔍 EXTRACCIÓN DE TEXTO ---
+# --- 🔍 EXTRACCIÓN DE TEXTO (TABLAS EN MARKDOWN) ---
 def extraer_texto_paginas(pdf_bytes, paginas_str=""):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texto = ""
@@ -247,6 +247,7 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
         for p in p_list:
             if 0 < p <= len(doc):
                 page = doc[p-1]
+                # EXTRACCIÓN EN MARKDOWN (CRÍTICA PARA NO FALLAR EN TABLAS)
                 try: texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("markdown") + "\n"
                 except: texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("text") + "\n"
     except Exception as e: 
@@ -257,8 +258,8 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
 st.sidebar.markdown("### 🔑 Configuración")
 api_key = st.sidebar.text_input("Introduce API Key:", type="password")
 
-# --- MODELOS ACTUALIZADOS SEGÚN TU LISTA ---
-modelo_seleccionado = st.sidebar.selectbox("Modelo:", ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-3.1-flash-lite"])
+# --- MODELOS AUTOMÁTICOS (El 2.5-flash será el principal) ---
+modelo_seleccionado = st.sidebar.selectbox("Modelo:", ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.5-pro"])
 
 col_logo, col_titulo = st.columns([1, 5])
 with col_logo:
@@ -267,7 +268,7 @@ with col_logo:
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
-    st.caption("v7.5 | Estructura Completa Alnylam Restaurada + Optimización")
+    st.caption("v7.6 | Lectura Automática + Tablas Markdown (Visita 25 Fix)")
 
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
@@ -277,7 +278,7 @@ with st.container():
 
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container">Rellena las páginas. <b>¡Poner las páginas del manual de laboratorio evita que la web se bloquee!</b></div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-container">Configura el protocolo y las páginas del SoE y Assessments.</div>', unsafe_allow_html=True)
     protocolo_sel = st.selectbox("Protocolo:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
     
     c1, c2 = st.columns(2)
@@ -286,9 +287,6 @@ with st.container():
     
     p_ass = c2.text_input("Páginas Assessments (ej. 40-60):", "40-60")
     v_lab = c2.text_input("Visita Manual Lab:", "Visita 25")
-    
-    # --- NUEVA CASILLA PARA EVITAR EL ERROR 429 ---
-    p_lab = st.text_input("Páginas Manual Lab (Opcional, pero muy recomendado para evitar errores 429. Ej: 30-35):", "")
 
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
 with st.container():
@@ -299,7 +297,7 @@ with st.container():
             status_text = st.empty()
             
             try:
-                status_text.text("📖 Analizando tablas y filtrando laboratorio...")
+                status_text.text("📖 Analizando tablas con estructura de columnas...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 p_bytes = f_proto.read()
@@ -307,19 +305,21 @@ with st.container():
                 t_ass = extraer_texto_paginas(p_bytes, p_ass)
                 barra_progreso.progress(40)
                 
+                status_text.text("🧪 Leyendo el manual de laboratorio completo...")
                 t_lab = ""
                 if f_labs:
                     for f in f_labs: 
-                        # Ahora extrae solo las páginas indicadas del laboratorio
-                        t_lab += extraer_texto_paginas(f.read(), p_lab)
+                        # Lee TODO el manual, sin pedir páginas
+                        t_lab += extraer_texto_paginas(f.read(), "")
                 
                 barra_progreso.progress(70)
+                status_text.text("🧠 IA cruzando filas y columnas de la visita...")
                 prompt = f"""
                 Analiza la visita '{v_proto}' en esta TABLA SOE (MARKDOWN): {t_soe}.
                 Busca la columna '{v_proto}'. Solo activa procedimientos con marca (X, *, punto).
                 Si la visita no existe en la tabla, devuelve todo false.
                 
-                Extrae tubos de lab para '{v_lab}' de aquí: {t_lab[:50000]}.
+                Extrae tubos de lab para '{v_lab}' de aquí (resumiendo los esenciales): {t_lab[:80000]}.
                 
                 JSON:
                 {{
