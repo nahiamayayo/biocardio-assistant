@@ -68,10 +68,9 @@ def crear_documento_word(datos_json, protocolo_nombre):
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
         datos = json.loads(match.group(0)) if match else json.loads(datos_json)
     except:
-        datos = {"visita": "Error", "procedimientos": {}, "otros_procedimientos": [], "detalles": {}}
+        datos = {"visita": "Error", "procedimientos": {}, "detalles": {}}
 
     proc = datos.get("procedimientos", {})
-    otros = datos.get("otros_procedimientos", [])
     det = datos.get("detalles", {})
     doc = Document()
     
@@ -161,13 +160,7 @@ def crear_documento_word(datos_json, protocolo_nombre):
             for i, h in enumerate(hdr): t_vit_post.cell(0, i).text = h
             t_vit_post.cell(1, 0).text = "30 min post"
             doc.add_paragraph("")
-
-        if otros:
-            doc.add_heading("OTROS PROCEDIMIENTOS DE LA VISITA", level=2)
-            for proc_extra in otros:
-                doc.add_paragraph(f"☐ {proc_extra}").bold = True
-            doc.add_paragraph("")
-
+        
         doc.add_paragraph("\nFirmado: _______________________      Fecha: ______________")
 
         # --- PÁGINA 2: MÉDICO ---
@@ -248,11 +241,6 @@ def crear_documento_word(datos_json, protocolo_nombre):
         if proc.get("infusion"):
             doc.add_paragraph("\n☐ Administración de medicación del estudio (Study drug administration)").bold = True
 
-        if otros:
-            doc.add_paragraph("\n☐ OTROS PROCEDIMIENTOS PROGRAMADOS:").bold = True
-            for proc_extra in otros:
-                doc.add_paragraph(f"    ☐ {proc_extra}")
-
         doc.add_paragraph("\n\nFirma: ______________________________        Fecha: ______________")
 
         # --- PÁGINA 2: MÉDICO ---
@@ -298,6 +286,7 @@ with col_logo:
     except: st.title("🏥")
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("### 🔑 Configuración")
@@ -379,9 +368,6 @@ with st.container():
                 - nyha: true SOLO si hay marca en NYHA.
                 - karnofsky: true SOLO si hay marca en Karnofsky.
 
-                ¡NUEVA REGLA CRÍTICA - EXTRACTOR UNIVERSAL!:
-                Para CUALQUIER OTRA FILA de la tabla que tenga una marca (X) en la columna '{v_proto}' y no esté en la lista de reglas anterior, captura el nombre exacto de ese procedimiento y añádelo a la lista de texto "otros_procedimientos".
-
                 Tras tu razonamiento, genera el JSON estricto con este formato:
                 {{
                   "visita": "{v_proto}",
@@ -390,7 +376,6 @@ with st.container():
                     "examen_fisico": false, "examen_fisico_breve": false, "test_embarazo": false,
                     "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
-                  "otros_procedimientos": ["Nombre de prueba 1", "Nombre de prueba 2"],
                   "detalles": {{ "laboratorio_tubos": "Resumen extraído con colores..." }}
                 }}
                 """
