@@ -18,9 +18,7 @@ st.markdown("""
     .stFileUploader label { font-weight: bold !important; color: #1a1a1a !important; font-size: 19px !important; display: block; margin-bottom: 12px !important; }
     .step-container { background-color: white; padding: 25px 30px; border-radius: 15px; border-left: 8px solid #007d32; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 35px; }
     .step-header { color: #007d32; font-size: 24px; font-weight: bold; margin-top: 15px; margin-bottom: 10px; }
-    .step-explanation { color: #555; font-size: 16px; margin-bottom: 20px; font-style: italic; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
     .stButton>button { background-color: #007d32 !important; color: white !important; border-radius: 12px !important; padding: 15px 30px !important; font-size: 18px !important; font-weight: bold !important; width: 100%; transition: 0.3s; border: none !important; }
-    .stButton>button:hover { background-color: #005a24 !important; box-shadow: 0 4px 15px rgba(0,125,50,0.3); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -45,7 +43,7 @@ PROCEDIMIENTOS_MAESTROS = """
 17. Study intervention infusion / Study drug administration
 """
 
-# --- 📄 GENERADOR DEL WORD DINÁMICO (ALEXION vs ALNYLAM) ---
+# --- 📄 GENERADOR DEL WORD DINÁMICO ---
 def crear_documento_word_pro(datos_json, protocolo_nombre):
     try:
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
@@ -57,7 +55,6 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
     det = datos.get("detalles", {})
     doc = Document()
     
-    # === FORZAR ESTILOS A NEGRO Y TÍTULOS EN NEGRITA ===
     style = doc.styles['Normal']
     style.font.name = 'Calibri'
     style.font.size = Pt(10)
@@ -72,325 +69,154 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
 
     es_alexion = "ALXN" in protocolo_nombre
 
-    # =========================================================================
-    # PLANTILLA 1: ALEXION
-    # =========================================================================
     if es_alexion:
+        # HOJA ENFERMERÍA ALEXION
         h_enf = doc.add_heading(f"HOJA DE ENFERMERÍA: {datos.get('visita', 'N/A')}", level=1)
         h_enf.alignment = WD_ALIGN_PARAGRAPH.CENTER
         doc.add_paragraph(f"Protocolo: {protocolo_nombre}     ID: ______________").bold = True
         
         doc.add_heading("PRIMEROS PASOS", level=2)
-        doc.add_paragraph("☐ Registrar visita para asignar infusión al paciente en Almac (IXRS)")
+        doc.add_paragraph("☐ Registrar visita para asignar infusión en Almac (IXRS)")
         doc.add_paragraph("☐ Fecha de la visita: ______________")
         
-        doc.add_heading("PRE-INFUSIÓN (dentro de las 2 horas antes de la infusión)", level=2)
+        doc.add_heading("PRE-INFUSIÓN", level=2)
         doc.add_paragraph("☐ Peso: _________ kg")
         
         if proc.get("cuestionarios"):
-            doc.add_paragraph("☐ Cuestionarios o PROs (TABLET en armario):").bold = True
-            doc.add_paragraph("    ☐ KCCQ-OS  ☐ EQ-5D-5L  ☐ SF-36  ☐ PGIC (EN PAPEL)")
+            doc.add_paragraph("☐ Cuestionarios: KCCQ-OS, EQ-5D-5L, SF-36, PGIC").bold = True
 
         hdr = ["Tiempo", "Hora", "PA Sist.", "PA Diast.", "Pulso", "Resp.", "O2 (%)", "Ta (ºC)"]
-        
         if proc.get("signos_vitales"):
-            doc.add_paragraph("☐ Signos vitales: (tras 5 minutos descanso)").bold = True
-            if proc.get("laboratorio"):
-                t_vit_pre = doc.add_table(rows=3, cols=8)
-                t_vit_pre.style = 'Table Grid'
-                for i, h in enumerate(hdr): t_vit_pre.cell(0, i).text = h
-                t_vit_pre.cell(1, 0).text = "Pre-extracción"
-                t_vit_pre.cell(2, 0).text = "Pre-infusión"
-            else:
-                t_vit_pre = doc.add_table(rows=2, cols=8)
-                t_vit_pre.style = 'Table Grid'
-                for i, h in enumerate(hdr): t_vit_pre.cell(0, i).text = h
-                t_vit_pre.cell(1, 0).text = "Pre-infusión"
-            doc.add_paragraph("")
-
-        if proc.get("ecg_pre"):
-            doc.add_paragraph("☐ Pre-Electrocardiograma de 12 derivaciones").bold = True
-            doc.add_paragraph("    ☐ Posición supino\n    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
-
-        if proc.get("laboratorio"):
-            doc.add_paragraph("☐ Extraer muestras de sangre y orina").bold = True
-            doc.add_paragraph(f"Tubos a extraer según manual: {det.get('laboratorio_tubos', 'Ver manual')}").italic = True
-
-        if proc.get("test_6mwt"):
-            doc.add_paragraph("☐ Test de los 6 minutos (6MWT)").bold = True
-            doc.add_paragraph("    • Rellenar en Course Name: 6MWT 2F; y en Course Lenght: 20m")
-
-        if proc.get("infusion"):
-            doc.add_heading("ADMINISTRACIÓN DE INFUSIÓN + SIGNOS VITALES", level=2)
-            doc.add_paragraph("*La infusión debe durar 1 hora. Limpiar vías con dextrosa 5%.").italic = True
-            doc.add_paragraph("☐ HORA DE INICIO: _________   ☐ HORA DE FIN: _________")
-            doc.add_paragraph("\nSignos vitales durante la infusión:").bold = True
-            t_vit_inf = doc.add_table(rows=5, cols=8)
-            t_vit_inf.style = 'Table Grid'
-            for i, h in enumerate(hdr): t_vit_inf.cell(0, i).text = h
-            for r, text in enumerate(["15 min infusión", "30 min infusión", "45 min infusión", "1h infusión"]):
-                t_vit_inf.cell(r+1, 0).text = text
-            doc.add_paragraph("")
-
-        doc.add_heading("POST-INFUSIÓN (30 min)", level=2)
-        if proc.get("pk_post"): doc.add_paragraph("☐ PK-post infusión: sacar del brazo opuesto.").bold = True
-        if proc.get("ecg_post"): doc.add_paragraph("☐ Post-Electrocardiograma.").bold = True
-        if proc.get("signos_vitales"):
-            t_vit_post = doc.add_table(rows=2, cols=8)
-            t_vit_post.style = 'Table Grid'
-            for i, h in enumerate(hdr): t_vit_post.cell(0, i).text = h
-            t_vit_post.cell(1, 0).text = "30 min post"
-        
-        doc.add_paragraph("\nFirmado: _______________________      Fecha: ______________")
-
-        # PÁGINA 2: HOJA MÉDICA (Alexion)
-        doc.add_page_break()
-        h_med = doc.add_heading(f"HOJA MÉDICA: {datos.get('visita', 'N/A')}", level=1)
-        h_med.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        doc.add_paragraph(f"Protocolo: {protocolo_nombre}     ID: ______________").bold = True
-        doc.add_paragraph("☐ Fecha de la visita: ______________\n")
-        
-        if proc.get("examen_fisico"): 
-            doc.add_paragraph("☐ Examen físico COMPLETO").bold = True
-            doc.add_paragraph("(Ver aspecto general, piel, nariz, orejas, ojos, cuello, garganta, corazón, abdomen, pulmones, sistema vascular, sistema nervioso, sistema musculo esquelético y extremidades)\n")
-        if proc.get("examen_fisico_breve"): 
-            doc.add_paragraph("☐ Examen físico BREVE (Dirigido por síntomas)").bold = True
-            doc.add_paragraph("Inclusive of general appearance, heart, lungs, skin, musculoskeletal system and extremities and other organs or body systems as clinically indicated.\n")
-        
-        if proc.get("nyha"): doc.add_paragraph("☐ Clasificación NYHA:  I [ ]   II [ ]   III [ ]   IV [ ]").bold = True
-        if proc.get("karnofsky"): doc.add_paragraph("☐ Discapacidad (Karnofsky): 100% a 0% evaluado.").bold = True
-        doc.add_paragraph("☐ Medicamentos, terapias o procedimientos simultáneos").bold = True
-        doc.add_paragraph("☐ Eventos adversos (AEs)\n").bold = True
-        doc.add_paragraph("\nFirmado (Médico): _______________________      Fecha: ______________")
-
-    # =========================================================================
-    # PLANTILLA 2: ALNYLAM
-    # =========================================================================
-    else:
-        h_enf = doc.add_heading(f"{datos.get('visita', 'N/A')} - Hoja de Enfermería", level=1)
-        h_enf.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        doc.add_paragraph("______________________________________________________________")
-        doc.add_paragraph(f"Protocol: {protocolo_nombre}\nID:\nFecha de la visita:").bold = True
-        doc.add_paragraph("______________________________________________________________\n")
-        
-        if proc.get("signos_vitales"):
-            doc.add_paragraph("☐ Signos vitales:").bold = True
-            hdr = ["Tiempo", "Hora", "PA Sist.", "PA Diast.", "Pulso", "Resp.", "O2 (%)", "Ta (ºC)"]
-            t_vit = doc.add_table(rows=2, cols=8)
+            doc.add_paragraph("☐ Signos vitales: (reposo 5 min)").bold = True
+            rows = 3 if proc.get("laboratorio") else 2
+            t_vit = doc.add_table(rows=rows, cols=8)
             t_vit.style = 'Table Grid'
             for i, h in enumerate(hdr): t_vit.cell(0, i).text = h
-            doc.add_paragraph("")
+            if proc.get("laboratorio"):
+                t_vit.cell(1, 0).text = "Pre-extracción"
+                t_vit.cell(2, 0).text = "Pre-infusión"
+            else:
+                t_vit.cell(1, 0).text = "Pre-infusión"
 
         if proc.get("ecg_pre"):
-            doc.add_paragraph("☐ Electrocardiograma de 12 derivaciones").bold = True
-            doc.add_paragraph("    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
+            doc.add_paragraph("☐ ECG 12 derivaciones Pre-infusión").bold = True
 
-        if proc.get("cuestionarios"):
-            doc.add_paragraph("☐ Cuestionarios y PROs realizados.").bold = True
-            
         if proc.get("laboratorio"):
-            doc.add_paragraph("☐ Extraer muestras de sangre y orina para analítica central").bold = True
-            doc.add_paragraph(f"{det.get('laboratorio_tubos', 'Ver manual de laboratorio')}").italic = True
-            doc.add_paragraph("\n☐ Procesamiento de muestras en el laboratorio").bold = True
-            doc.add_paragraph("*(Completar tiras reactivas, centrifugado y alícuotas según el manual del estudio)*").italic = True
-            doc.add_paragraph("\n☐ Envío de muestras a Tª ambiente y congeladas").bold = True
+            doc.add_paragraph("☐ Extracciones:").bold = True
+            doc.add_paragraph(det.get("laboratorio_tubos", "Ver manual")).italic = True
 
         if proc.get("infusion"):
-            doc.add_paragraph("\n☐ Administración de medicación del estudio (Study drug administration)").bold = True
+            doc.add_heading("INFUSIÓN", level=2)
+            doc.add_paragraph("☐ HORA INICIO: _________   ☐ HORA FIN: _________")
+            t_inf = doc.add_table(rows=5, cols=8)
+            t_inf.style = 'Table Grid'
+            for i, h in enumerate(hdr): t_inf.cell(0, i).text = h
+            for r, t in enumerate(["15 min", "30 min", "45 min", "1h"]): t_inf.cell(r+1, 0).text = t
 
-        doc.add_paragraph("\n\nFirma: ______________________________        Fecha: ______________")
-
-        # PÁGINA 2: HOJA MÉDICA / GENERAL (Alnylam)
+        # HOJA MÉDICA ALEXION
         doc.add_page_break()
-        h_med = doc.add_heading(f"{datos.get('visita', 'N/A')} - General / Médica", level=1)
-        h_med.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        doc.add_paragraph("______________________________________________________________")
-        doc.add_paragraph(f"Protocol: {protocolo_nombre}\nID:\nFecha de la visita:").bold = True
-        doc.add_paragraph("______________________________________________________________\n")
+        doc.add_heading(f"HOJA MÉDICA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if proc.get("examen_fisico"): doc.add_paragraph("☐ Examen físico COMPLETO").bold = True
+        if proc.get("examen_fisico_breve"): doc.add_paragraph("☐ Examen físico BREVE").bold = True
+        if proc.get("nyha"): doc.add_paragraph("☐ NYHA: I [ ] II [ ] III [ ] IV [ ]").bold = True
+        if proc.get("karnofsky"): doc.add_paragraph("☐ Karnofsky: ________ %").bold = True
+        doc.add_paragraph("\nFirmado: _______________________")
+
+    else:
+        # PLANTILLA ALNYLAM (Basada en tus documentos V4)
+        h_enf = doc.add_heading(f"{datos.get('visita', 'N/A')} - Hoja de Enfermería", level=1)
+        h_enf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        doc.add_paragraph(f"Protocol: {protocolo_nombre}     ID: ______________").bold = True
         
-        doc.add_paragraph("☐ Dar cita para próxima visita: ___________________").bold = True
-        doc.add_paragraph("\n☐ Medicamentos concomitantes, terapias o procedimientos actuales:").bold = True
-        doc.add_paragraph("    □ ........................................................................")
-        doc.add_paragraph("\n☐ Eventos adversos desde la firma del consentimiento:").bold = True
-        doc.add_paragraph("    □ ........................................................................")
+        if proc.get("laboratorio"):
+            doc.add_paragraph("☐ Extraer muestras de sangre y orina").bold = True
+            doc.add_paragraph(det.get("laboratorio_tubos", "Ver manual")).italic = True
+            doc.add_paragraph("\n☐ Procesamiento de muestras (según manual)").bold = True
+            doc.add_paragraph("☐ Envío de muestras").bold = True
 
-        if proc.get("examen_fisico") or proc.get("examen_fisico_breve"): 
-            doc.add_paragraph("\n☐ Examen físico (Completo o dirigido por síntomas)").bold = True
-        if proc.get("nyha"): doc.add_paragraph("☐ Clasificación NYHA evaluada").bold = True
-        if proc.get("karnofsky"): doc.add_paragraph("☐ Puntuación Karnofsky (Karnofsky Performance Status)").bold = True
-        if proc.get("test_6mwt"): doc.add_paragraph("☐ Test de los 6 minutos (6MWT) completado").bold = True
-
-        doc.add_paragraph("\nCIERRE DE VISITA:").bold = True
-        doc.add_paragraph("☐ Registrar próxima visita en Greenphire")
-        doc.add_paragraph("☐ Escribir historia clínica en Diraya y debe imprimirse, fecharse, firmarse y guardar en físico")
-        doc.add_paragraph("☐ Rellenar CRF (Medidata)")
+        doc.add_page_break()
+        h_med = doc.add_heading(f"{datos.get('visita', 'N/A')} - Hoja Médica", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+        doc.add_paragraph("☐ Dar cita para próxima visita").bold = True
+        doc.add_paragraph("☐ Medicamentos concomitantes").bold = True
+        doc.add_paragraph("☐ Eventos adversos").bold = True
+        doc.add_paragraph("☐ Registro Greenphire / Diraya / Medidata").bold = True
 
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer
 
-# --- 🔍 EXTRACCIÓN DE TEXTO (TABLAS RECUPERADAS) ---
 def extraer_texto_paginas(pdf_bytes, paginas_str=""):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texto = ""
     try:
-        paginas_a_leer = []
-        if paginas_str.strip(): 
-            p_set = set()
+        p_list = []
+        if paginas_str.strip():
             for b in paginas_str.split(','):
                 if '-' in b:
                     s, e = b.split('-')
-                    p_set.update(range(int(s), int(e)+1))
-                else: 
-                    p_set.add(int(b))
-            paginas_a_leer = sorted(list(p_set))
-        else:
-            paginas_a_leer = range(1, len(doc) + 1)
-            
-        for p in paginas_a_leer:
+                    p_list.extend(range(int(s), int(e)+1))
+                else: p_list.append(int(b))
+        else: p_list = range(1, len(doc) + 1)
+        
+        for p in p_list:
             if 0 < p <= len(doc):
-                page = doc[p-1]
-                # ¡AQUÍ ESTABA EL ERROR! Recuperamos el "markdown" para que la IA vea la tabla cuadriculada.
-                try:
-                    texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("markdown") + "\n"
-                except:
-                    texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("text") + "\n"
-    except Exception as e: 
-        texto = f"Error en lectura de PDF: {e}"
+                # RESTAURADO: page.get_text("markdown") para leer tablas correctamente
+                texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("markdown") + "\n"
+    except: texto = "Error lectura."
     return texto
 
 # --- 🖥️ INTERFAZ WEB ---
-col_logo, col_titulo = st.columns([1, 5])
-with col_logo:
-    try: st.image("huj.png", width=140)
-    except: st.title("🏥")
-with col_titulo:
-    st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
+st.sidebar.markdown("### 🔑 Configuración")
+api_key = st.sidebar.text_input("Introduce API Key:", type="password")
+modelo_seleccionado = st.sidebar.selectbox("Modelo:", ["gemini-2.0-flash", "gemini-1.5-flash"])
 
-with st.sidebar:
-    st.markdown("### 🔑 Acceso")
-    st.markdown("Obtén tu clave en [Google AI Studio ↗](https://aistudio.google.com/app/apikey)")
-    api_key = st.text_input("Introduce tu API Key:", type="password")
-    st.divider()
-    modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3.1-flash-lite-preview"])
-    st.caption("v7.2 | Tablas Restauradas")
+st.markdown('<h1 style="color: #007d32;">BioCardio Clinical Assistant v7.3</h1>', unsafe_allow_html=True)
 
-st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">Carga el Protocolo SoE (Las X) y los manuales de lab.</div>', unsafe_allow_html=True)
-    f_proto = st.file_uploader("1. SUBIR PROTOCOLO (Apartado SoE)", type=["pdf"])
-    f_labs = st.file_uploader("2. SUBIR MANUALES DE LABORATORIO", type=["pdf"], accept_multiple_files=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    f_proto = st.file_uploader("1. SUBIR PROTOCOLO (SoE)", type=["pdf"])
+    f_labs = st.file_uploader("2. SUBIR MANUALES LAB", type=["pdf"], accept_multiple_files=True)
 
-st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">Indica el protocolo, las páginas y la visita a generar.</div>', unsafe_allow_html=True)
-    protocolo_sel = st.selectbox("Selecciona el Protocolo a maquetar:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
-    
+    protocolo_sel = st.selectbox("Protocolo:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
     c1, c2 = st.columns(2)
-    p_tabla = c1.text_input("Páginas de la Tabla SoE (ej. 11-16):", "11-16")
-    v_proto = c1.text_input("Visita en Protocolo (ej. Visit 17):", "Visit 17")
-    p_assessments = c2.text_input("Páginas Study Assessments:", "40-60")
-    v_lab = c2.text_input("Visita en Manual Lab:", "Visit 17")
-    st.markdown('</div>', unsafe_allow_html=True)
+    p_tabla = c1.text_input("Páginas SoE:", "11-16")
+    v_proto = c1.text_input("Visita Protocolo:", "V25")
+    p_ass = c2.text_input("Páginas Assessments:", "40-60")
+    v_lab = c2.text_input("Visita Lab:", "Visita 25")
 
-st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
-with st.container():
-    st.markdown('<div class="step-container"><div class="step-explanation">La IA analizará el protocolo y generará las Hojas oficiales según el diseño del ensayo seleccionado.</div>', unsafe_allow_html=True)
-    
-    if st.button("✨ Generar Hoja de Visita Oficial HUJ"):
-        if not api_key or not f_proto:
-            st.error("⚠️ Faltan documentos o la API Key.")
-        else:
-            barra_progreso = st.progress(0)
-            status_text = st.empty()
-            
+if st.button("✨ GENERAR HOJA OFICIAL"):
+    if not api_key or not f_proto: st.error("Faltan datos.")
+    else:
+        with st.spinner("Analizando tablas en modo estricto..."):
             try:
-                status_text.text("📖 Extrayendo cuadrícula de la tabla del protocolo...")
-                p_bytes = f_proto.read()
-                t_soe = extraer_texto_paginas(p_bytes, p_tabla)
-                t_ass = extraer_texto_paginas(p_bytes, p_assessments)
-                barra_progreso.progress(30)
-
-                status_text.text("🧪 Analizando manuales de laboratorio...")
-                t_lab = ""
-                if f_labs:
-                    for f in f_labs:
-                        t_lab += f"\n--- DOC: {f.name} ---\n" + extraer_texto_paginas(f.read(), "")
-                barra_progreso.progress(60)
-                
-                status_text.text("🧠 IA cruzando filas y columnas de la visita...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
+                p_bytes = f_proto.read()
+                t_soe = extraer_texto_paginas(p_bytes, p_tabla)
+                t_ass = extraer_texto_paginas(p_bytes, p_ass)
+                t_lab = ""
+                if f_labs:
+                    for f in f_labs: t_lab += extraer_texto_paginas(f.read(), "")
                 
                 prompt = f"""
-                Eres el Director Médico del ensayo. Analiza la tabla de protocolo proporcionada para la visita '{v_proto}'.
-                NOTA: La TABLA SOE está en formato Markdown (separada por el símbolo |).
+                Analiza la visita '{v_proto}' en esta TABLA SOE (MARKDOWN): {t_soe}.
+                Busca la columna '{v_proto}'. Solo activa procedimientos con marca (X, *, punto).
+                Si la visita no existe en la tabla, devuelve todo false.
                 
-                --- LISTA MAESTRA DE PROCEDIMIENTOS POSIBLES ---
-                {PROCEDIMIENTOS_MAESTROS}
+                Extrae tubos de lab para '{v_lab}' de aquí: {t_lab[:70000]}.
                 
-                --- TABLA SOE (MARKDOWN) --- 
-                {t_soe}
-                
-                --- DETALLES TÉCNICOS --- 
-                {t_ass}
-                
-                --- LABORATORIO --- 
-                {t_lab[:80000]}
-
-                REGLA DE TOLERANCIA CERO:
-                1. Busca la columna EXACTA de la visita '{v_proto}' en la tabla Markdown.
-                2. Sigue esa columna hacia abajo fila por fila. 
-                3. Solo pon "true" si hay una marca explícita (X, asterisco, punto, número) en la intersección del procedimiento y la columna de la visita. Si no hay marca o la celda está vacía, pon "false".
-
-                REGLAS DE MAPEO (Si hay marca):
-                - examen_fisico: true SOLO si marca 'Full physical examination'.
-                - examen_fisico_breve: true SOLO si marca 'Symptom-directed physical examination'.
-                - laboratorio: true si hay marcas en Central clinical laboratory tests o extracciones.
-                - LABORATORIO_TUBOS: Si 'laboratorio' es true, busca '{v_lab}' en el manual de laboratorio y extrae los tubos, volúmenes y colores.
-
-                Formato estricto de salida:
+                JSON:
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
-                    "cuestionarios": true|false,
-                    "signos_vitales": true|false,
-                    "ecg_pre": true|false,
-                    "ecg_post": true|false,
-                    "test_6mwt": true|false,
-                    "laboratorio": true|false,
-                    "infusion": true|false,
-                    "pk_post": true|false,
-                    "eco": true|false,
-                    "examen_fisico": true|false,
-                    "examen_fisico_breve": true|false,
-                    "nyha": true|false,
-                    "karnofsky": true|false
+                    "cuestionarios": bool, "signos_vitales": bool, "ecg_pre": bool, "laboratorio": bool, "infusion": bool,
+                    "examen_fisico": bool (si marca Full), "examen_fisico_breve": bool (si marca Symptom-directed),
+                    "nyha": bool, "karnofsky": bool
                   }},
-                  "detalles": {{
-                    "laboratorio_tubos": "Resumen exacto de los tubos y colores a extraer...",
-                    "instrucciones_ecg": "Detalles técnicos del ECG...",
-                    "instrucciones_6mwt": "Detalles técnicos del test de marcha..."
-                  }}
+                  "detalles": {{ "laboratorio_tubos": "Lista de tubos..." }}
                 }}
                 """
-                
                 res = model.generate_content(prompt)
-                doc_word = crear_documento_word_pro(res.text, protocolo_sel)
-                
-                barra_progreso.progress(100)
-                status_text.success("✅ Documentos médicos oficiales generados con éxito.")
-                
-                st.download_button(
-                    label="⬇️ Descargar Documento Word",
-                    data=doc_word,
-                    file_name=f"Hojas_Oficiales_{v_proto.replace(' ','_')}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-            except Exception as e:
-                st.error(f"Error técnico: {e}")
-                
-    st.markdown("</div>", unsafe_allow_html=True)
+                st.download_button("⬇️ Descargar Word", crear_documento_word_pro(res.text, protocolo_sel), f"{v_proto}.docx")
+            except Exception as e: st.error(f"Error: {e}")
