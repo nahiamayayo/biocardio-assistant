@@ -38,8 +38,10 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
                 if '-' in b:
                     s, e = b.split('-')
                     p_list.extend(range(int(s), int(e)+1))
-                else: p_list.append(int(b))
-        else: p_list = range(1, len(doc) + 1)
+                else: 
+                    p_list.append(int(b))
+        else: 
+            p_list = range(1, len(doc) + 1)
         
         for p in p_list:
             if 0 < p <= len(doc):
@@ -61,16 +63,15 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
 # =====================================================================
 # 3. GENERADOR DEL DOCUMENTO WORD (PLANTILLAS ESTRICTAS)
 # =====================================================================
-    def crear_documento_word(datos_json, protocolo_nombre):
+def crear_documento_word(datos_json, protocolo_nombre):
     try:
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
         datos = json.loads(match.group(0)) if match else json.loads(datos_json)
     except:
-        # Añadimos "otros_procedimientos" aquí para que no de error si viene vacío
         datos = {"visita": "Error", "procedimientos": {}, "otros_procedimientos": [], "detalles": {}}
 
     proc = datos.get("procedimientos", {})
-    otros = datos.get("otros_procedimientos", []) # <--- ESTA LÍNEA ES NUEVA
+    otros = datos.get("otros_procedimientos", [])
     det = datos.get("detalles", {})
     doc = Document()
     
@@ -159,14 +160,14 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
             t_vit_post.style = 'Table Grid'
             for i, h in enumerate(hdr): t_vit_post.cell(0, i).text = h
             t_vit_post.cell(1, 0).text = "30 min post"
-            
-            # --- EXTRACTOR UNIVERSAL (Imprime lo que no está en la lista principal) ---
+            doc.add_paragraph("")
+
         if otros:
             doc.add_heading("OTROS PROCEDIMIENTOS DE LA VISITA", level=2)
             for proc_extra in otros:
                 doc.add_paragraph(f"☐ {proc_extra}").bold = True
             doc.add_paragraph("")
-        
+
         doc.add_paragraph("\nFirmado: _______________________      Fecha: ______________")
 
         # --- PÁGINA 2: MÉDICO ---
@@ -183,7 +184,6 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
             doc.add_paragraph("☐ Examen físico BREVE post-infusión (Dirigido por síntomas)").bold = True
             doc.add_paragraph("Inclusive of general appearance, heart, lungs, skin, musculoskeletal system and extremities and other organs or body systems as clinically indicated should be performed prior to the participant's discharge.\n")
 
-        # --- EXPANSIÓN DE NYHA Y KARNOFSKY ---
         if proc.get("nyha"): 
             doc.add_paragraph("☐ Clasificación funcional NYHA (seleccionar una):").bold = True
             doc.add_paragraph("   ☐ NYHA I: Asintomático")
@@ -230,7 +230,6 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
             doc.add_paragraph("☐ Electrocardiograma de 12 derivaciones").bold = True
             doc.add_paragraph("    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
 
-        # --- AÑADIDO EL ECOCARDIOGRAMA ---
         if proc.get("eco"):
             doc.add_paragraph("☐ Ecocardiograma").bold = True
 
@@ -270,27 +269,13 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
         if proc.get("examen_fisico") or proc.get("examen_fisico_breve"): 
             doc.add_paragraph("\n☐ Examen físico (Completo o dirigido por síntomas)").bold = True
 
-         # --- EXPANSIÓN DE NYHA Y KARNOFSKY ---
         if proc.get("nyha"): 
-            doc.add_paragraph("☐ Clasificación funcional NYHA (seleccionar una):").bold = True
-            doc.add_paragraph("   ☐ NYHA I: Asintomático")
-            doc.add_paragraph("   ☐ NYHA II: Falta de aire (disnea) a grandes esfuerzos")
-            doc.add_paragraph("   ☐ NYHA III: Falta de aire (disnea) a pequeños esfuerzos")
-            doc.add_paragraph("   ☐ NYHA IV: Falta de aire (disnea) en reposo (se ahoga estando quieto)\n")
+            doc.add_paragraph("☐ Clasificación funcional NYHA evaluada:").bold = True
+            doc.add_paragraph("   ☐ NYHA I  ☐ NYHA II  ☐ NYHA III  ☐ NYHA IV\n")
 
         if proc.get("karnofsky"): 
-            doc.add_paragraph("☐ Discapacidad (con escala Karnofsky):").bold = True
-            doc.add_paragraph("   100% - Actividad normal (capaz de desempeñar actividades), asintomático.")
-            doc.add_paragraph("   90% - Actividad normal, con síntomas y signos leves.")
-            doc.add_paragraph("   80% - Actividad normal con esfuerzo, síntomas leves.")
-            doc.add_paragraph("   70% - Capaz de cuidar de si mismo, pero no realiza trabajo activo.")
-            doc.add_paragraph("   60% - En ocasiones necesita ayuda, capaz de cuidarse la mayor parte del tiempo.")
-            doc.add_paragraph("   50% - Necesita atención médica y ayuda frecuente.")
-            doc.add_paragraph("   40% - Con discapacidad, requiere cuidados especiales.")
-            doc.add_paragraph("   30% - Discapacidad grave, en condiciones de hospitalización.")
-            doc.add_paragraph("   20% - Enfermo grave, necesita tratamiento activo de sostén.")
-            doc.add_paragraph("   10% - Paciente decaído o moribundo.")
-            doc.add_paragraph("   0% - Paciente fallecido.\n")
+            doc.add_paragraph("☐ Puntuación Karnofsky (Karnofsky Performance Status):").bold = True
+            doc.add_paragraph("   ☐ 100% ☐ 90% ☐ 80% ☐ 70% ☐ 60% ☐ 50% ☐ 40% ☐ 30% ☐ 20% ☐ 10% ☐ 0%\n")
 
         if proc.get("test_6mwt"): doc.add_paragraph("☐ Test de los 6 minutos (6MWT) completado").bold = True
 
@@ -401,13 +386,14 @@ with st.container():
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
-                    "cuestionarios": false, "signos_vitales": false, ... (todas las demás)
+                    "cuestionarios": false, "signos_vitales": false, "ecg_pre": false, "ecg_post": false, "laboratorio": false, "infusion": false,
+                    "examen_fisico": false, "examen_fisico_breve": false, "test_embarazo": false,
+                    "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
                   "otros_procedimientos": ["Nombre de prueba 1", "Nombre de prueba 2"],
-                  "detalles": {{ "laboratorio_tubos": "..." }}
+                  "detalles": {{ "laboratorio_tubos": "Resumen extraído con colores..." }}
                 }}
                 """
-                
                 
                 res = model.generate_content(prompt)
                 
