@@ -25,14 +25,37 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# 2. MOTOR DE EXTRACCIÓN DE PDF (MARKDOWN PARA TABLAS)
+# 2. MOTOR DE EXTRACCIÓN (IMÁGENES PARA TABLAS, TEXTO PARA MANUAL)
 # =====================================================================
+def extraer_imagenes_pdf(pdf_bytes, paginas_str):
+    """ ¡NUEVO! Convierte las páginas de la tabla SoE en imágenes para que la IA no pierda las columnas. """
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    imagenes = []
+    p_list = []
+    if paginas_str.strip():
+        for b in paginas_str.split(','):
+            if '-' in b:
+                s, e = b.split('-')
+                p_list.extend(range(int(s), int(e)+1))
+            else: 
+                p_list.append(int(b))
+    else:
+        p_list = range(1, len(doc) + 1)
+    
+    for p in p_list:
+        if 0 < p <= len(doc):
+            page = doc[p-1]
+            # Matriz para aumentar resolución y que la IA lea perfectamente la tabla
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            img_data = pix.tobytes("png")
+            imagenes.append({"mime_type": "image/png", "data": img_data})
+    return imagenes
+
 def extraer_texto_pdf(pdf_bytes, paginas_str=""):
-    """ Extrae el texto de un PDF. Si se indican páginas, usa formato Markdown para no romper las tablas. """
+    """ Extrae solo el texto lineal (Perfecto para manuales de laboratorio). """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texto = ""
     try:
-        # Calcular qué páginas leer
         p_list = []
         if paginas_str.strip():
             for b in paginas_str.split(','):
@@ -44,25 +67,17 @@ def extraer_texto_pdf(pdf_bytes, paginas_str=""):
         else:
             p_list = range(1, len(doc) + 1)
         
-        # Extraer página a página
         for p in p_list:
             if 0 < p <= len(doc):
-                page = doc[p-1]
-                texto += f"\n--- PÁGINA {p} ---\n"
-                # Usar markdown para conservar la estructura de columnas | V24 | V25 |
-                try: 
-                    texto += page.get_text("markdown") + "\n"
-                except: 
-                    texto += page.get_text("text") + "\n"
+                texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("text") + "\n"
     except Exception as e:
         texto = f"Error al leer PDF: {e}"
     return texto
 
 # =====================================================================
-# 3. GENERADOR DEL DOCUMENTO WORD (ESTILOS Y PLANTILLAS)
+# 3. GENERADOR DEL DOCUMENTO WORD (ESTILOS OFICIALES)
 # =====================================================================
 def crear_documento_word(datos_json, protocolo_nombre):
-    # Intentar parsear la respuesta de la IA
     try:
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
         datos = json.loads(match.group(0)) if match else json.loads(datos_json)
@@ -78,7 +93,6 @@ def crear_documento_word(datos_json, protocolo_nombre):
     style.font.name = 'Calibri'
     style.font.size = Pt(10)
     style.font.color.rgb = RGBColor(0, 0, 0)
-    
     for i in range(1, 4):
         if f'Heading {i}' in doc.styles:
             h_style = doc.styles[f'Heading {i}']
@@ -103,6 +117,9 @@ def crear_documento_word(datos_json, protocolo_nombre):
         doc.add_heading("PRE-INFUSIÓN (dentro de las 2 horas antes de la infusión)", level=2)
         doc.add_paragraph("☐ Peso: _________ kg")
         
+        if proc.get("test_embarazo"):
+            doc.add_paragraph("☐ Test de embarazo").bold = True
+
         if proc.get("cuestionarios"):
             doc.add_paragraph("☐ Cuestionarios o PROs (TABLET en armario):").bold = True
             doc.add_paragraph("    ☐ KCCQ-OS  ☐ EQ-5D-5L  ☐ SF-36  ☐ PGIC (EN PAPEL)")
@@ -162,8 +179,15 @@ def crear_documento_word(datos_json, protocolo_nombre):
         doc.add_paragraph(f"Protocolo: {protocolo_nombre}     ID: ______________").bold = True
         doc.add_paragraph("☐ Fecha de la visita: ______________\n")
         
-        if proc.get("examen_fisico"): doc.add_paragraph("☐ Examen físico COMPLETO").bold = True
-        if proc.get("examen_fisico_breve"): doc.add_paragraph("☐ Examen físico BREVE (Dirigido por síntomas)").bold = True
+        if proc.get("examen_fisico"): 
+            doc.add_paragraph("☐ Examen físico COMPLETO").bold = True
+            doc.add_paragraph("(Ver aspecto general, piel, nariz, orejas, ojos, cuello, garganta, corazón, abdomen, pulmones, sistema vascular, sistema nervioso, sistema musculo esquelético y extremidades)\n")
+        
+        # El examen breve sale siempre que haya infusión (o si lo marca la tabla explícitamente)
+        if proc.get("examen_fisico_breve") or proc.get("infusion"): 
+            doc.add_paragraph("☐ Examen físico BREVE post-infusión (Dirigido por síntomas)").bold = True
+            doc.add_paragraph("Inclusive of general appearance, heart, lungs, skin, musculoskeletal system and extremities and other organs or body systems as clinically indicated should be performed prior to the participant's discharge.\n")
+
         if proc.get("nyha"): doc.add_paragraph("☐ Clasificación NYHA:  I [ ]   II [ ]   III [ ]   IV [ ]").bold = True
         if proc.get("karnofsky"): doc.add_paragraph("☐ Discapacidad (Karnofsky): 100% a 0% evaluado.").bold = True
         
@@ -196,6 +220,9 @@ def crear_documento_word(datos_json, protocolo_nombre):
         if proc.get("cuestionarios"):
             doc.add_paragraph("☐ Cuestionarios y PROs realizados.").bold = True
             
+        if proc.get("test_embarazo"):
+            doc.add_paragraph("☐ Test de embarazo en orina").bold = True
+
         if proc.get("laboratorio"):
             doc.add_paragraph("☐ Extraer muestras de sangre y orina para analítica central").bold = True
             doc.add_paragraph(f"{det.get('laboratorio_tubos', 'Ver manual de laboratorio')}").italic = True
@@ -244,7 +271,7 @@ with col_logo:
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
-    st.caption("v9.0 | Limpieza Total de Código + Extracción Markdown")
+    st.caption("v10.0 | Extracción con VISIÓN ARTIFICIAL (Imágenes Reales)")
 
 with st.sidebar:
     st.markdown("### 🔑 Configuración")
@@ -253,18 +280,18 @@ with st.sidebar:
 
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container">Sube el protocolo (SoE) y los manuales de laboratorio íntegros.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-container">Sube el protocolo (SoE) y los manuales de laboratorio.</div>', unsafe_allow_html=True)
     f_proto = st.file_uploader("1. SUBIR PROTOCOLO (SoE)", type=["pdf"])
     f_labs = st.file_uploader("2. SUBIR MANUALES LAB", type=["pdf"], accept_multiple_files=True)
 
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container">Configura los parámetros para crear la plantilla.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-container">Configura los parámetros (No es necesario añadir las páginas del lab).</div>', unsafe_allow_html=True)
     protocolo_sel = st.selectbox("Protocolo a maquetar:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
     
     c1, c2 = st.columns(2)
     p_tabla = c1.text_input("Páginas Tabla SoE (ej. 11-16):", "11-16")
-    v_proto = c1.text_input("Visita Protocolo (ej. V25b):", "V25b")
+    v_proto = c1.text_input("Visita Protocolo (ej. V 25b, Day 589):", "V 25b")
     p_ass = c2.text_input("Páginas Assessments (ej. 40-60):", "40-60")
     v_lab = c2.text_input("Visita Manual Lab:", "Visita 25")
 
@@ -278,63 +305,81 @@ with st.container():
             status_text = st.empty()
             
             try:
-                # 1. Extraer Protocolo
-                status_text.text("📖 Analizando tabla del protocolo en formato columnas...")
+                # 1. Tomar fotografías de la Tabla SoE (¡Esto cambia todo!)
+                status_text.text("📷 Tomando fotografías de las páginas de la tabla...")
                 p_bytes = f_proto.read()
-                t_soe = extraer_texto_pdf(p_bytes, p_tabla)
+                imagenes_soe = extraer_imagenes_pdf(p_bytes, p_tabla)
                 t_ass = extraer_texto_pdf(p_bytes, p_ass)
                 barra_progreso.progress(40)
                 
-                # 2. Extraer Manuales Lab (Completos, sin pedir páginas)
-                status_text.text("🧪 Analizando el manual de laboratorio completo...")
+                # 2. Leer texto del Manual Lab
+                status_text.text("🧪 Leyendo el manual de laboratorio...")
                 t_lab = ""
                 if f_labs:
                     for f in f_labs: 
                         t_lab += extraer_texto_pdf(f.read(), "")
                 barra_progreso.progress(70)
                 
-                # 3. Inteligencia Artificial (Cerebro)
-                status_text.text("🧠 IA evaluando qué procedimientos corresponden...")
+                # 3. Inteligencia Artificial (Visión)
+                status_text.text("🧠 IA visualizando las columnas para no inventar marcas...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
-                Eres un Data Manager Clínico. Tu objetivo es leer una tabla en formato Markdown y un manual de laboratorio.
+                Eres un Director Médico experto en ensayos clínicos. 
+                Te adjunto las IMÁGENES de las páginas de la tabla SoE (Schedule of Activities).
                 
-                --- TABLA SOE (MARKDOWN) --- 
-                {t_soe}
+                TAREA PRINCIPAL (TOLERANCIA CERO A INVENTAR):
+                1. Busca visualmente en la imagen la columna de la visita '{v_proto}'.
+                2. Recorre esa columna fila por fila hacia abajo.
+                3. ¡IMPORTANTE! Si la celda de esa columna está VACÍA para un procedimiento, DEBES poner su valor a FALSE en el JSON. No deduzcas absolutamente nada que no esté marcado con una X.
                 
-                --- DETALLES TÉCNICOS --- 
-                {t_ass}
+                REGLAS DE MAPEO:
+                - cuestionarios: true si hay marca en cuestionarios (KCCQ, EQ-5D, SF-36, etc.)
+                - signos_vitales: true si hay marca en Vital signs o Weight
+                - ecg_pre: true si hay marca en 12-lead ECG
+                - ecg_post: true si hay marca explícita de ECG post-infusión ese día
+                - test_6mwt: true si hay marca en 6-Minute Walk Test
+                - laboratorio: true si hay marca en Central clinical laboratory tests
+                - infusion: true si hay marca en Study intervention infusion
+                - pk_post: true si hay marca en PK samples
+                - eco: true si hay marca en Echocardiogram
+                - examen_fisico: true SOLO si hay marca en 'Full physical examination'
+                - examen_fisico_breve: true SOLO si hay marca en 'Symptom-directed physical examination'
+                - nyha: true si hay marca en NYHA
+                - karnofsky: true si hay marca en Karnofsky
+                - test_embarazo: true si hay marca en Pregnancy test
                 
-                --- LABORATORIO --- 
-                {t_lab[:80000]}
-
-                INSTRUCCIONES CRÍTICAS (TOLERANCIA CERO A INVENTAR):
-                1. Busca la columna exacta '{v_proto}' en la tabla SoE.
-                2. Si la columna no existe, devuelve todos los booleanos a FALSE.
-                3. Si existe, baja por esa columna y pon TRUE solo a los procedimientos que tengan una marca en esa columna específica.
-                4. LABORATORIO: Si hay extracciones, busca la visita '{v_lab}' en el manual de laboratorio adjunto y resume los tubos, volúmenes y colores.
+                TEXTO DE APOYO (Assessments): {t_ass[:20000]}
                 
-                FORMATO JSON DE SALIDA OBLIGATORIO:
+                MANUAL DE LABORATORIO: {t_lab[:60000]}
+                (Solo extrae los tubos correspondientes a '{v_lab}' SI Y SOLO SI 'laboratorio' es true. Si es false, deja el texto vacío).
+                
+                FORMATO JSON OBLIGATORIO:
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
-                    "cuestionarios": bool, "signos_vitales": bool, "ecg_pre": bool, "ecg_post": bool, "laboratorio": bool, "infusion": bool,
-                    "examen_fisico": bool, "examen_fisico_breve": bool,
-                    "nyha": bool, "karnofsky": bool, "test_6mwt": bool, "pk_post": bool, "eco": bool
+                    "cuestionarios": false, "signos_vitales": false, "ecg_pre": false, "ecg_post": false, "laboratorio": false, "infusion": false,
+                    "examen_fisico": false, "examen_fisico_breve": false,
+                    "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false, "test_embarazo": false
                   }},
                   "detalles": {{ "laboratorio_tubos": "Resumen de tubos y colores..." }}
                 }}
                 """
-                res = model.generate_content(prompt)
+                
+                # Preparamos el contenido (Prompt + Imágenes)
+                contents = [prompt]
+                for img in imagenes_soe:
+                    contents.append({"mime_type": img["mime_type"], "data": img["data"]})
+                
+                res = model.generate_content(contents)
                 
                 # 4. Generar el Word
-                status_text.text("📝 Maquetando documento Word...")
+                status_text.text("📝 Maquetando documento Oficial...")
                 doc_word = crear_documento_word(res.text, protocolo_sel)
                 
                 barra_progreso.progress(100)
-                status_text.success("✅ Documento generado con éxito.")
+                status_text.success("✅ Generado con precisión visual.")
                 st.download_button("⬇️ Descargar Documento Word", doc_word, f"{v_proto}.docx")
                 
             except Exception as e: 
