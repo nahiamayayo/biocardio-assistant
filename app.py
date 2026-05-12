@@ -126,7 +126,6 @@ def crear_documento_word(datos_json, protocolo_nombre):
             doc.add_paragraph("☐ Pre-Electrocardiograma de 12 derivaciones").bold = True
             doc.add_paragraph("    ☐ Posición supino    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
 
-        # --- AÑADIDO EL ECOCARDIOGRAMA ---
         if proc.get("eco"):
             doc.add_paragraph("☐ Ecocardiograma (dejar instrucciones) → realizado por ____________").bold = True
 
@@ -257,14 +256,27 @@ def crear_documento_word(datos_json, protocolo_nombre):
         if proc.get("examen_fisico") or proc.get("examen_fisico_breve"): 
             doc.add_paragraph("\n☐ Examen físico (Completo o dirigido por síntomas)").bold = True
 
-        # --- EXPANSIÓN DE NYHA Y KARNOFSKY ---
+         # --- EXPANSIÓN DE NYHA Y KARNOFSKY ---
         if proc.get("nyha"): 
-            doc.add_paragraph("☐ Clasificación funcional NYHA evaluada:").bold = True
-            doc.add_paragraph("   ☐ NYHA I  ☐ NYHA II  ☐ NYHA III  ☐ NYHA IV\n")
+            doc.add_paragraph("☐ Clasificación funcional NYHA (seleccionar una):").bold = True
+            doc.add_paragraph("   ☐ NYHA I: Asintomático")
+            doc.add_paragraph("   ☐ NYHA II: Falta de aire (disnea) a grandes esfuerzos")
+            doc.add_paragraph("   ☐ NYHA III: Falta de aire (disnea) a pequeños esfuerzos")
+            doc.add_paragraph("   ☐ NYHA IV: Falta de aire (disnea) en reposo (se ahoga estando quieto)\n")
 
         if proc.get("karnofsky"): 
-            doc.add_paragraph("☐ Puntuación Karnofsky (Karnofsky Performance Status):").bold = True
-            doc.add_paragraph("   ☐ 100% ☐ 90% ☐ 80% ☐ 70% ☐ 60% ☐ 50% ☐ 40% ☐ 30% ☐ 20% ☐ 10% ☐ 0%\n")
+            doc.add_paragraph("☐ Discapacidad (con escala Karnofsky):").bold = True
+            doc.add_paragraph("   100% - Actividad normal (capaz de desempeñar actividades), asintomático.")
+            doc.add_paragraph("   90% - Actividad normal, con síntomas y signos leves.")
+            doc.add_paragraph("   80% - Actividad normal con esfuerzo, síntomas leves.")
+            doc.add_paragraph("   70% - Capaz de cuidar de si mismo, pero no realiza trabajo activo.")
+            doc.add_paragraph("   60% - En ocasiones necesita ayuda, capaz de cuidarse la mayor parte del tiempo.")
+            doc.add_paragraph("   50% - Necesita atención médica y ayuda frecuente.")
+            doc.add_paragraph("   40% - Con discapacidad, requiere cuidados especiales.")
+            doc.add_paragraph("   30% - Discapacidad grave, en condiciones de hospitalización.")
+            doc.add_paragraph("   20% - Enfermo grave, necesita tratamiento activo de sostén.")
+            doc.add_paragraph("   10% - Paciente decaído o moribundo.")
+            doc.add_paragraph("   0% - Paciente fallecido.\n")
 
         if proc.get("test_6mwt"): doc.add_paragraph("☐ Test de los 6 minutos (6MWT) completado").bold = True
 
@@ -287,11 +299,11 @@ with col_logo:
     except: st.title("🏥")
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
-    st.caption("v12.1 | Ecocardiograma Fix + Colores Tubos Lab + NYHA Detallado")
 
 with st.sidebar:
     st.markdown("### 🔑 Configuración")
+    st.markdown("Para que el sistema funcione, necesitas una **API Key** personal.")
+    st.markdown("[👉 Consigue tu clave gratuita en Google AI Studio](https://aistudio.google.com/app/apikey)")
     api_key = st.text_input("Introduce API Key:", type="password")
     modelo_seleccionado = st.selectbox("Modelo:", ["gemini-2.5-flash", "gemini-2.0-flash-lite"])
 
@@ -299,20 +311,20 @@ st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe
 with st.container():
     st.markdown('<div class="step-container">Sube el protocolo (SoE) y los manuales de laboratorio.</div>', unsafe_allow_html=True)
     f_proto = st.file_uploader("1. SUBIR PROTOCOLO (SoE)", type=["pdf"])
-    f_labs = st.file_uploader("2. SUBIR MANUALES LAB", type=["pdf"], accept_multiple_files=True)
+    f_labs = st.file_uploader("2. SUBIR MANUALES LABORATORIO", type=["pdf"], accept_multiple_files=True)
 
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
     protocolo_sel = st.selectbox("Protocolo a maquetar:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
     c1, c2 = st.columns(2)
-    p_tabla = c1.text_input("Páginas Tabla SoE (ej. 23-28):", "23-28")
-    v_proto = c1.text_input("Visita Protocolo (ej. V 30):", "V 30")
-    p_ass = c2.text_input("Páginas Assessments (ej. 67-80):", "67-80")
-    v_lab = c2.text_input("Visita Manual Lab:", "Visita 30")
+    p_tabla = c1.text_input("Páginas Tabla SoE (ej. 23-28):")
+    v_proto = c1.text_input("Visita Protocolo (ej. V 30/W108):")
+    p_ass = c2.text_input("Páginas Assessments (ej. 67-80):")
+    v_lab = c2.text_input("Visita Manual Lab:", "Visit 30/W108")
 
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
 with st.container():
-    if st.button("✨ GENERAR HOJA OFICIAL"):
+    if st.button("GENERAR DOCUMENTO DE VISITA"):
         if not api_key or not f_proto: 
             st.error("⚠️ Faltan documentos o la API Key.")
         else:
@@ -320,20 +332,20 @@ with st.container():
             status_text = st.empty()
             
             try:
-                status_text.text("📖 Analizando celdas exactas de la tabla SoE...")
+                status_text.text("Analizando celdas exactas de la tabla SoE...")
                 p_bytes = f_proto.read()
                 t_soe = extraer_texto_matricial(p_bytes, p_tabla)
                 t_ass = extraer_texto_matricial(p_bytes, p_ass)
                 barra_progreso.progress(40)
                 
-                status_text.text("🧪 Leyendo el manual de laboratorio...")
+                status_text.text("Leyendo el manual de laboratorio...")
                 t_lab = ""
                 if f_labs:
                     for f in f_labs: 
                         t_lab += extraer_texto_matricial(f.read(), "")
                 barra_progreso.progress(70)
                 
-                status_text.text("🧠 IA aplicando razonamiento de Tolerancia Cero...")
+                status_text.text("IA aplicando razonamiento...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
@@ -385,8 +397,8 @@ with st.container():
                 doc_word = crear_documento_word(res.text, protocolo_sel)
                 
                 barra_progreso.progress(100)
-                status_text.success("✅ Generado con éxito, sin inventar procedimientos.")
-                st.download_button("⬇️ Descargar Documento Oficial", doc_word, f"{v_proto}.docx")
+                status_text.success("✅ Generado con éxito.")
+                st.download_button("⬇️ Descargar Documento de Visita", doc_word, f"{v_proto}.docx")
                 
             except Exception as e: 
                 st.error(f"Error crítico en el proceso: {e}")
