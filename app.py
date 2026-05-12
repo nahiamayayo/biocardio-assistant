@@ -61,14 +61,16 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
 # =====================================================================
 # 3. GENERADOR DEL DOCUMENTO WORD (PLANTILLAS ESTRICTAS)
 # =====================================================================
-def crear_documento_word(datos_json, protocolo_nombre):
+    def crear_documento_word(datos_json, protocolo_nombre):
     try:
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
         datos = json.loads(match.group(0)) if match else json.loads(datos_json)
     except:
-        datos = {"visita": "Error", "procedimientos": {}, "detalles": {}}
+        # Añadimos "otros_procedimientos" aquí para que no de error si viene vacío
+        datos = {"visita": "Error", "procedimientos": {}, "otros_procedimientos": [], "detalles": {}}
 
     proc = datos.get("procedimientos", {})
+    otros = datos.get("otros_procedimientos", []) # <--- ESTA LÍNEA ES NUEVA
     det = datos.get("detalles", {})
     doc = Document()
     
@@ -157,6 +159,13 @@ def crear_documento_word(datos_json, protocolo_nombre):
             t_vit_post.style = 'Table Grid'
             for i, h in enumerate(hdr): t_vit_post.cell(0, i).text = h
             t_vit_post.cell(1, 0).text = "30 min post"
+            
+            # --- EXTRACTOR UNIVERSAL (Imprime lo que no está en la lista principal) ---
+        if otros:
+            doc.add_heading("OTROS PROCEDIMIENTOS DE LA VISITA", level=2)
+            for proc_extra in otros:
+                doc.add_paragraph(f"☐ {proc_extra}").bold = True
+            doc.add_paragraph("")
         
         doc.add_paragraph("\nFirmado: _______________________      Fecha: ______________")
 
@@ -239,6 +248,11 @@ def crear_documento_word(datos_json, protocolo_nombre):
 
         if proc.get("infusion"):
             doc.add_paragraph("\n☐ Administración de medicación del estudio (Study drug administration)").bold = True
+
+        if otros:
+            doc.add_paragraph("\n☐ OTROS PROCEDIMIENTOS PROGRAMADOS:").bold = True
+            for proc_extra in otros:
+                doc.add_paragraph(f"    ☐ {proc_extra}")
 
         doc.add_paragraph("\n\nFirma: ______________________________        Fecha: ______________")
 
@@ -380,17 +394,20 @@ with st.container():
                 - nyha: true SOLO si hay marca en NYHA.
                 - karnofsky: true SOLO si hay marca en Karnofsky.
 
+                ¡NUEVA REGLA CRÍTICA - EXTRACTOR UNIVERSAL!:
+                Para CUALQUIER OTRA FILA de la tabla que tenga una marca (X) en la columna '{v_proto}' y no esté en la lista de reglas anterior, captura el nombre exacto de ese procedimiento y añádelo a la lista de texto "otros_procedimientos".
+
                 Tras tu razonamiento, genera el JSON estricto con este formato:
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
-                    "cuestionarios": false, "signos_vitales": false, "ecg_pre": false, "ecg_post": false, "laboratorio": false, "infusion": false,
-                    "examen_fisico": false, "examen_fisico_breve": false, "test_embarazo": false,
-                    "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
+                    "cuestionarios": false, "signos_vitales": false, ... (todas las demás)
                   }},
-                  "detalles": {{ "laboratorio_tubos": "Resumen extraído con colores..." }}
+                  "otros_procedimientos": ["Nombre de prueba 1", "Nombre de prueba 2"],
+                  "detalles": {{ "laboratorio_tubos": "..." }}
                 }}
                 """
+                
                 
                 res = model.generate_content(prompt)
                 
