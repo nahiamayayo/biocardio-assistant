@@ -18,7 +18,9 @@ st.markdown("""
     .stFileUploader label { font-weight: bold !important; color: #1a1a1a !important; font-size: 19px !important; display: block; margin-bottom: 12px !important; }
     .step-container { background-color: white; padding: 25px 30px; border-radius: 15px; border-left: 8px solid #007d32; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 35px; }
     .step-header { color: #007d32; font-size: 24px; font-weight: bold; margin-top: 15px; margin-bottom: 10px; }
+    .step-explanation { color: #555; font-size: 16px; margin-bottom: 20px; font-style: italic; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
     .stButton>button { background-color: #007d32 !important; color: white !important; border-radius: 12px !important; padding: 15px 30px !important; font-size: 18px !important; font-weight: bold !important; width: 100%; transition: 0.3s; border: none !important; }
+    .stButton>button:hover { background-color: #005a24 !important; box-shadow: 0 4px 15px rgba(0,125,50,0.3); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -103,7 +105,7 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
 
         if proc.get("laboratorio"):
             doc.add_paragraph("☐ Extracciones:").bold = True
-            doc.add_paragraph(det.get("laboratorio_tubos", "Ver manual")).italic = True
+            doc.add_paragraph(det.get("laboratorio_tubos", "Ver manual de laboratorio")).italic = True
 
         if proc.get("infusion"):
             doc.add_heading("INFUSIÓN", level=2)
@@ -123,14 +125,14 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
         doc.add_paragraph("\nFirmado: _______________________")
 
     else:
-        # PLANTILLA ALNYLAM (Basada en tus documentos V4)
+        # PLANTILLA ALNYLAM 
         h_enf = doc.add_heading(f"{datos.get('visita', 'N/A')} - Hoja de Enfermería", level=1)
         h_enf.alignment = WD_ALIGN_PARAGRAPH.CENTER
         doc.add_paragraph(f"Protocol: {protocolo_nombre}     ID: ______________").bold = True
         
         if proc.get("laboratorio"):
             doc.add_paragraph("☐ Extraer muestras de sangre y orina").bold = True
-            doc.add_paragraph(det.get("laboratorio_tubos", "Ver manual")).italic = True
+            doc.add_paragraph(det.get("laboratorio_tubos", "Ver manual de laboratorio")).italic = True
             doc.add_paragraph("\n☐ Procesamiento de muestras (según manual)").bold = True
             doc.add_paragraph("☐ Envío de muestras").bold = True
 
@@ -161,50 +163,67 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
         
         for p in p_list:
             if 0 < p <= len(doc):
-                # RESTAURADO: page.get_text("markdown") para leer tablas correctamente
-                texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("markdown") + "\n"
-    except: texto = "Error lectura."
+                page = doc[p-1]
+                try: texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("markdown") + "\n"
+                except: texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("text") + "\n"
+    except Exception as e: 
+        texto = f"Error lectura: {e}"
     return texto
 
 # --- 🖥️ INTERFAZ WEB ---
 st.sidebar.markdown("### 🔑 Configuración")
 api_key = st.sidebar.text_input("Introduce API Key:", type="password")
-modelo_seleccionado = st.sidebar.selectbox("Modelo:", ["gemini-2.0-flash", "gemini-1.5-flash"])
 
-st.markdown('<h1 style="color: #007d32;">BioCardio Clinical Assistant v7.3</h1>', unsafe_allow_html=True)
+# --- MODELOS ACTUALIZADOS SEGÚN TU LISTA ---
+modelo_seleccionado = st.sidebar.selectbox("Modelo:", ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-3.1-flash-lite"])
 
+st.markdown('<h1 style="color: #007d32;">BioCardio Clinical Assistant</h1>', unsafe_allow_html=True)
+st.caption("v7.4 | Modelos actualizados + Optimización de tokens para evitar bloqueos")
+
+st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
+    st.markdown('<div class="step-container">Sube los PDFs.</div>', unsafe_allow_html=True)
     f_proto = st.file_uploader("1. SUBIR PROTOCOLO (SoE)", type=["pdf"])
     f_labs = st.file_uploader("2. SUBIR MANUALES LAB", type=["pdf"], accept_multiple_files=True)
 
+st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
+    st.markdown('<div class="step-container">Rellena las páginas. <b>¡Poner las páginas del manual de laboratorio evita que la web se bloquee!</b></div>', unsafe_allow_html=True)
     protocolo_sel = st.selectbox("Protocolo:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
+    
     c1, c2 = st.columns(2)
-    p_tabla = c1.text_input("Páginas SoE:", "11-16")
-    v_proto = c1.text_input("Visita Protocolo:", "V25")
-    p_ass = c2.text_input("Páginas Assessments:", "40-60")
-    v_lab = c2.text_input("Visita Lab:", "Visita 25")
+    p_tabla = c1.text_input("Páginas Tabla SoE (ej. 11-16):", "11-16")
+    v_proto = c1.text_input("Visita Protocolo (ej. V25):", "V25")
+    
+    p_ass = c2.text_input("Páginas Assessments (ej. 40-60):", "40-60")
+    v_lab = c2.text_input("Visita Manual Lab:", "Visita 25")
+    
+    # --- NUEVA CASILLA PARA EVITAR EL ERROR 429 ---
+    p_lab = st.text_input("Páginas Manual Lab (Opcional, pero muy recomendado para evitar errores 429. Ej: 30-35):", "")
 
 if st.button("✨ GENERAR HOJA OFICIAL"):
     if not api_key or not f_proto: st.error("Faltan datos.")
     else:
-        with st.spinner("Analizando tablas en modo estricto..."):
+        with st.spinner("Analizando tablas y filtrando laboratorio..."):
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 p_bytes = f_proto.read()
                 t_soe = extraer_texto_paginas(p_bytes, p_tabla)
                 t_ass = extraer_texto_paginas(p_bytes, p_ass)
+                
                 t_lab = ""
                 if f_labs:
-                    for f in f_labs: t_lab += extraer_texto_paginas(f.read(), "")
+                    for f in f_labs: 
+                        # Ahora extrae solo las páginas indicadas del laboratorio
+                        t_lab += extraer_texto_paginas(f.read(), p_lab)
                 
                 prompt = f"""
                 Analiza la visita '{v_proto}' en esta TABLA SOE (MARKDOWN): {t_soe}.
                 Busca la columna '{v_proto}'. Solo activa procedimientos con marca (X, *, punto).
                 Si la visita no existe en la tabla, devuelve todo false.
                 
-                Extrae tubos de lab para '{v_lab}' de aquí: {t_lab[:70000]}.
+                Extrae tubos de lab para '{v_lab}' de aquí: {t_lab[:50000]}.
                 
                 JSON:
                 {{
@@ -214,7 +233,7 @@ if st.button("✨ GENERAR HOJA OFICIAL"):
                     "examen_fisico": bool (si marca Full), "examen_fisico_breve": bool (si marca Symptom-directed),
                     "nyha": bool, "karnofsky": bool
                   }},
-                  "detalles": {{ "laboratorio_tubos": "Lista de tubos..." }}
+                  "detalles": {{ "laboratorio_tubos": "Lista de tubos extraída del texto..." }}
                 }}
                 """
                 res = model.generate_content(prompt)
