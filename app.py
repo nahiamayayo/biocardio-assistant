@@ -93,18 +93,15 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
 
         hdr = ["Tiempo", "Hora", "PA Sist.", "PA Diast.", "Pulso", "Resp.", "O2 (%)", "Ta (ºC)"]
         
-        # --- LÓGICA CORREGIDA DE SIGNOS VITALES ---
         if proc.get("signos_vitales"):
             doc.add_paragraph("☐ Signos vitales: (tras 5 minutos descanso)").bold = True
             if proc.get("laboratorio"):
-                # Hay laboratorio: Doble toma
                 t_vit_pre = doc.add_table(rows=3, cols=8)
                 t_vit_pre.style = 'Table Grid'
                 for i, h in enumerate(hdr): t_vit_pre.cell(0, i).text = h
                 t_vit_pre.cell(1, 0).text = "Pre-extracción"
                 t_vit_pre.cell(2, 0).text = "Pre-infusión"
             else:
-                # No hay laboratorio: Toma simple
                 t_vit_pre = doc.add_table(rows=2, cols=8)
                 t_vit_pre.style = 'Table Grid'
                 for i, h in enumerate(hdr): t_vit_pre.cell(0, i).text = h
@@ -153,7 +150,6 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
         doc.add_paragraph(f"Protocolo: {protocolo_nombre}     ID: ______________").bold = True
         doc.add_paragraph("☐ Fecha de la visita: ______________\n")
         
-        # --- LÓGICA CORREGIDA DE EXAMEN FÍSICO ---
         if proc.get("examen_fisico"): 
             doc.add_paragraph("☐ Examen físico COMPLETO").bold = True
             doc.add_paragraph("(Ver aspecto general, piel, nariz, orejas, ojos, cuello, garganta, corazón, abdomen, pulmones, sistema vascular, sistema nervioso, sistema musculo esquelético y extremidades)\n")
@@ -234,7 +230,7 @@ def crear_documento_word_pro(datos_json, protocolo_nombre):
     buffer.seek(0)
     return buffer
 
-# --- 🔍 EXTRACCIÓN DE TEXTO ---
+# --- 🔍 EXTRACCIÓN DE TEXTO (TABLAS RECUPERADAS) ---
 def extraer_texto_paginas(pdf_bytes, paginas_str=""):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texto = ""
@@ -254,7 +250,12 @@ def extraer_texto_paginas(pdf_bytes, paginas_str=""):
             
         for p in paginas_a_leer:
             if 0 < p <= len(doc):
-                texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("text") + "\n"
+                page = doc[p-1]
+                # ¡AQUÍ ESTABA EL ERROR! Recuperamos el "markdown" para que la IA vea la tabla cuadriculada.
+                try:
+                    texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("markdown") + "\n"
+                except:
+                    texto += f"\n--- PÁGINA {p} ---\n" + page.get_text("text") + "\n"
     except Exception as e: 
         texto = f"Error en lectura de PDF: {e}"
     return texto
@@ -274,7 +275,7 @@ with st.sidebar:
     api_key = st.text_input("Introduce tu API Key:", type="password")
     st.divider()
     modelo_seleccionado = st.selectbox("Modelo de IA:", ["gemini-3.1-flash-lite-preview"])
-    st.caption("v7.1 | Lógica Condicional + Anti-Alucinaciones")
+    st.caption("v7.2 | Tablas Restauradas")
 
 st.markdown('<div class="step-header">📄 Paso 1: Documentación</div>', unsafe_allow_html=True)
 with st.container():
@@ -307,7 +308,7 @@ with st.container():
             status_text = st.empty()
             
             try:
-                status_text.text("📖 Leyendo la tabla del protocolo y los assessments...")
+                status_text.text("📖 Extrayendo cuadrícula de la tabla del protocolo...")
                 p_bytes = f_proto.read()
                 t_soe = extraer_texto_paginas(p_bytes, p_tabla)
                 t_ass = extraer_texto_paginas(p_bytes, p_assessments)
@@ -320,17 +321,18 @@ with st.container():
                         t_lab += f"\n--- DOC: {f.name} ---\n" + extraer_texto_paginas(f.read(), "")
                 barra_progreso.progress(60)
                 
-                status_text.text("🧠 IA cruzando información (Modo Estricto)...")
+                status_text.text("🧠 IA cruzando filas y columnas de la visita...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
                 Eres el Director Médico del ensayo. Analiza la tabla de protocolo proporcionada para la visita '{v_proto}'.
+                NOTA: La TABLA SOE está en formato Markdown (separada por el símbolo |).
                 
                 --- LISTA MAESTRA DE PROCEDIMIENTOS POSIBLES ---
                 {PROCEDIMIENTOS_MAESTROS}
                 
-                --- TABLA SOE --- 
+                --- TABLA SOE (MARKDOWN) --- 
                 {t_soe}
                 
                 --- DETALLES TÉCNICOS --- 
@@ -339,14 +341,14 @@ with st.container():
                 --- LABORATORIO --- 
                 {t_lab[:80000]}
 
-                REGLA DE TOLERANCIA CERO A LAS ALUCINACIONES:
-                1. Busca la columna EXACTA de la visita '{v_proto}' en el texto de la TABLA SOE.
-                2. Si la visita '{v_proto}' NO ESTÁ en el texto de la tabla, pon TODOS los booleanos a false. NO inventes nada.
-                3. Solo pon "true" si hay una marca explícita (X, asterisco, punto) en la intersección del procedimiento y la columna de la visita.
+                REGLA DE TOLERANCIA CERO:
+                1. Busca la columna EXACTA de la visita '{v_proto}' en la tabla Markdown.
+                2. Sigue esa columna hacia abajo fila por fila. 
+                3. Solo pon "true" si hay una marca explícita (X, asterisco, punto, número) en la intersección del procedimiento y la columna de la visita. Si no hay marca o la celda está vacía, pon "false".
 
-                REGLAS DE MAPEO (Si la visita sí existe):
+                REGLAS DE MAPEO (Si hay marca):
                 - examen_fisico: true SOLO si marca 'Full physical examination'.
-                - examen_fisico_breve: true SOLO si marca 'Symptom-directed physical examination' o examen breve.
+                - examen_fisico_breve: true SOLO si marca 'Symptom-directed physical examination'.
                 - laboratorio: true si hay marcas en Central clinical laboratory tests o extracciones.
                 - LABORATORIO_TUBOS: Si 'laboratorio' es true, busca '{v_lab}' en el manual de laboratorio y extrae los tubos, volúmenes y colores.
 
