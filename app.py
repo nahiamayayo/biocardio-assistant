@@ -45,7 +45,6 @@ def extraer_texto_matricial(pdf_bytes, paginas_str=""):
             if 0 < p <= len(doc):
                 page = doc[p-1]
                 texto += f"\n--- PÁGINA {p} ---\n"
-                # Intentamos extraer como tabla (matriz)
                 tablas = page.find_tables()
                 if tablas and len(tablas.tables) > 0:
                     for tabla in tablas.tables:
@@ -73,7 +72,6 @@ def crear_documento_word(datos_json, protocolo_nombre):
     det = datos.get("detalles", {})
     doc = Document()
     
-    # FORZAR TODO A NEGRO Y TÍTULOS EN NEGRITA
     style = doc.styles['Normal']
     style.font.name = 'Calibri'
     style.font.size = Pt(10)
@@ -100,11 +98,9 @@ def crear_documento_word(datos_json, protocolo_nombre):
         
         doc.add_heading("PRE-INFUSIÓN (dentro de las 2 horas antes de la infusión)", level=2)
         
-        # El peso y signos vitales van condicionados a la tabla
         if proc.get("signos_vitales"):
             doc.add_paragraph("☐ Peso: _________ kg")
             
-        # INTERRUPTOR DINÁMICO: Solo sale si hay marca en el protocolo
         if proc.get("test_embarazo"):
             doc.add_paragraph("☐ Test de embarazo en orina (mujeres en edad fértil)").bold = True
 
@@ -130,9 +126,13 @@ def crear_documento_word(datos_json, protocolo_nombre):
             doc.add_paragraph("☐ Pre-Electrocardiograma de 12 derivaciones").bold = True
             doc.add_paragraph("    ☐ Posición supino    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
 
+        # --- AÑADIDO EL ECOCARDIOGRAMA ---
+        if proc.get("eco"):
+            doc.add_paragraph("☐ Ecocardiograma (dejar instrucciones) → realizado por ____________").bold = True
+
         if proc.get("laboratorio"):
             doc.add_paragraph("☐ Extraer muestras de sangre y orina").bold = True
-            doc.add_paragraph(f"Tubos a extraer según manual: {det.get('laboratorio_tubos', 'Ver manual')}").italic = True
+            doc.add_paragraph(f"Tubos a extraer y preparar: {det.get('laboratorio_tubos', 'Ver manual')}").italic = True
 
         if proc.get("test_6mwt"):
             doc.add_paragraph("☐ Test de los 6 minutos (6MWT)").bold = True
@@ -171,13 +171,31 @@ def crear_documento_word(datos_json, protocolo_nombre):
             doc.add_paragraph("☐ Examen físico COMPLETO").bold = True
             doc.add_paragraph("(Ver aspecto general, piel, nariz, orejas, ojos, cuello, garganta, corazón, abdomen, pulmones, sistema vascular, sistema nervioso, sistema musculo esquelético y extremidades)\n")
         
-        # El examen breve sale si lo marca el protocolo, o si hay infusión (tal como pediste para la hoja médica)
         if proc.get("infusion") or proc.get("examen_fisico_breve"): 
             doc.add_paragraph("☐ Examen físico BREVE post-infusión (Dirigido por síntomas)").bold = True
             doc.add_paragraph("Inclusive of general appearance, heart, lungs, skin, musculoskeletal system and extremities and other organs or body systems as clinically indicated should be performed prior to the participant's discharge.\n")
 
-        if proc.get("nyha"): doc.add_paragraph("☐ Clasificación NYHA:  I [ ]   II [ ]   III [ ]   IV [ ]").bold = True
-        if proc.get("karnofsky"): doc.add_paragraph("☐ Discapacidad (Karnofsky): 100% a 0% evaluado.").bold = True
+        # --- EXPANSIÓN DE NYHA Y KARNOFSKY ---
+        if proc.get("nyha"): 
+            doc.add_paragraph("☐ Clasificación funcional NYHA (seleccionar una):").bold = True
+            doc.add_paragraph("   ☐ NYHA I: Asintomático")
+            doc.add_paragraph("   ☐ NYHA II: Falta de aire (disnea) a grandes esfuerzos")
+            doc.add_paragraph("   ☐ NYHA III: Falta de aire (disnea) a pequeños esfuerzos")
+            doc.add_paragraph("   ☐ NYHA IV: Falta de aire (disnea) en reposo (se ahoga estando quieto)\n")
+
+        if proc.get("karnofsky"): 
+            doc.add_paragraph("☐ Discapacidad (con escala Karnofsky):").bold = True
+            doc.add_paragraph("   100% - Actividad normal (capaz de desempeñar actividades), asintomático.")
+            doc.add_paragraph("   90% - Actividad normal, con síntomas y signos leves.")
+            doc.add_paragraph("   80% - Actividad normal con esfuerzo, síntomas leves.")
+            doc.add_paragraph("   70% - Capaz de cuidar de si mismo, pero no realiza trabajo activo.")
+            doc.add_paragraph("   60% - En ocasiones necesita ayuda, capaz de cuidarse la mayor parte del tiempo.")
+            doc.add_paragraph("   50% - Necesita atención médica y ayuda frecuente.")
+            doc.add_paragraph("   40% - Con discapacidad, requiere cuidados especiales.")
+            doc.add_paragraph("   30% - Discapacidad grave, en condiciones de hospitalización.")
+            doc.add_paragraph("   20% - Enfermo grave, necesita tratamiento activo de sostén.")
+            doc.add_paragraph("   10% - Paciente decaído o moribundo.")
+            doc.add_paragraph("   0% - Paciente fallecido.\n")
         
         doc.add_paragraph("☐ Medicamentos, terapias o procedimientos simultáneos").bold = True
         doc.add_paragraph("☐ Eventos adversos (AEs)\n").bold = True
@@ -203,6 +221,10 @@ def crear_documento_word(datos_json, protocolo_nombre):
         if proc.get("ecg_pre"):
             doc.add_paragraph("☐ Electrocardiograma de 12 derivaciones").bold = True
             doc.add_paragraph("    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
+
+        # --- AÑADIDO EL ECOCARDIOGRAMA ---
+        if proc.get("eco"):
+            doc.add_paragraph("☐ Ecocardiograma").bold = True
 
         if proc.get("cuestionarios"):
             doc.add_paragraph("☐ Cuestionarios y PROs realizados.").bold = True
@@ -234,8 +256,16 @@ def crear_documento_word(datos_json, protocolo_nombre):
 
         if proc.get("examen_fisico") or proc.get("examen_fisico_breve"): 
             doc.add_paragraph("\n☐ Examen físico (Completo o dirigido por síntomas)").bold = True
-        if proc.get("nyha"): doc.add_paragraph("☐ Clasificación NYHA evaluada").bold = True
-        if proc.get("karnofsky"): doc.add_paragraph("☐ Puntuación Karnofsky (Karnofsky Performance Status)").bold = True
+
+        # --- EXPANSIÓN DE NYHA Y KARNOFSKY ---
+        if proc.get("nyha"): 
+            doc.add_paragraph("☐ Clasificación funcional NYHA evaluada:").bold = True
+            doc.add_paragraph("   ☐ NYHA I  ☐ NYHA II  ☐ NYHA III  ☐ NYHA IV\n")
+
+        if proc.get("karnofsky"): 
+            doc.add_paragraph("☐ Puntuación Karnofsky (Karnofsky Performance Status):").bold = True
+            doc.add_paragraph("   ☐ 100% ☐ 90% ☐ 80% ☐ 70% ☐ 60% ☐ 50% ☐ 40% ☐ 30% ☐ 20% ☐ 10% ☐ 0%\n")
+
         if proc.get("test_6mwt"): doc.add_paragraph("☐ Test de los 6 minutos (6MWT) completado").bold = True
 
         doc.add_paragraph("\nCIERRE DE VISITA:").bold = True
@@ -258,7 +288,7 @@ with col_logo:
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
-    st.caption("v12.0 | Control Dinámico de Procedimientos (Cero Alucinaciones)")
+    st.caption("v12.1 | Ecocardiograma Fix + Colores Tubos Lab + NYHA Detallado")
 
 with st.sidebar:
     st.markdown("### 🔑 Configuración")
@@ -276,9 +306,9 @@ with st.container():
     protocolo_sel = st.selectbox("Protocolo a maquetar:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
     c1, c2 = st.columns(2)
     p_tabla = c1.text_input("Páginas Tabla SoE (ej. 23-28):", "23-28")
-    v_proto = c1.text_input("Visita Protocolo (ej. V 25b):", "V 25b")
+    v_proto = c1.text_input("Visita Protocolo (ej. V 30):", "V 30")
     p_ass = c2.text_input("Páginas Assessments (ej. 67-80):", "67-80")
-    v_lab = c2.text_input("Visita Manual Lab:", "Visita 25")
+    v_lab = c2.text_input("Visita Manual Lab:", "Visita 30")
 
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
 with st.container():
@@ -314,7 +344,7 @@ with st.container():
                 1. Busca la fila de encabezados y encuentra la columna exacta de '{v_proto}'.
                 2. Recorre las filas hacia abajo mirando ÚNICAMENTE el contenido de esa columna.
                 3. Si la celda en esa columna está escrita como "VACIO", el procedimiento es FALSE. Si tiene una 'X', asterisco o número, es TRUE.
-                4. Haz una lista confirmando cada procedimiento: "ECG: Vacío -> False", "Pregnancy test: X -> True", "Cuestionarios: Vacío -> False", etc.
+                4. Haz una lista confirmando cada procedimiento.
 
                 TABLA SOE MATRICIAL:
                 {t_soe}
@@ -328,10 +358,10 @@ with st.container():
                 - ecg_pre: true SOLO si hay marca en 12-lead ECG.
                 - ecg_post: true SOLO si el protocolo exige explícitamente ECG post-infusión ese día.
                 - test_6mwt: true SOLO si hay marca en 6-Minute Walk Test.
-                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests.
+                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests. (Si es true, extrae los tubos del manual para la visita '{v_lab}', INDICANDO EXPRESAMENTE EL COLOR DE LOS TAPONES para que enfermería prepare el material).
                 - infusion: true SOLO si hay marca en Study intervention infusion.
                 - pk_post: true SOLO si hay marca en PK samples.
-                - eco: true SOLO si hay marca en Echocardiogram.
+                - eco: true SOLO si hay marca en Echocardiogram o ECHO.
                 - examen_fisico: true SOLO si hay marca en 'Full physical examination'.
                 - examen_fisico_breve: true SOLO si hay marca en 'Symptom-directed physical examination'.
                 - test_embarazo: true SOLO si hay marca explícita en 'Pregnancy test' en la columna '{v_proto}'.
@@ -346,13 +376,12 @@ with st.container():
                     "examen_fisico": false, "examen_fisico_breve": false, "test_embarazo": false,
                     "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
-                  "detalles": {{ "laboratorio_tubos": "Resumen extraído..." }}
+                  "detalles": {{ "laboratorio_tubos": "Resumen extraído con colores..." }}
                 }}
                 """
                 
                 res = model.generate_content(prompt)
                 
-                # Generamos el Word directamente con el JSON que escupe la IA al final
                 doc_word = crear_documento_word(res.text, protocolo_sel)
                 
                 barra_progreso.progress(100)
