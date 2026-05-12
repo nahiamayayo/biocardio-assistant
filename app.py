@@ -25,34 +25,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# 2. MOTOR DE EXTRACCIÓN (IMÁGENES PARA TABLAS, TEXTO PARA MANUAL)
+# 2. MOTOR DE EXTRACCIÓN DE TABLAS MATRICIALES (SIN ALUCINACIONES)
 # =====================================================================
-def extraer_imagenes_pdf(pdf_bytes, paginas_str):
-    """ ¡NUEVO! Convierte las páginas de la tabla SoE en imágenes para que la IA no pierda las columnas. """
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    imagenes = []
-    p_list = []
-    if paginas_str.strip():
-        for b in paginas_str.split(','):
-            if '-' in b:
-                s, e = b.split('-')
-                p_list.extend(range(int(s), int(e)+1))
-            else: 
-                p_list.append(int(b))
-    else:
-        p_list = range(1, len(doc) + 1)
-    
-    for p in p_list:
-        if 0 < p <= len(doc):
-            page = doc[p-1]
-            # Matriz para aumentar resolución y que la IA lea perfectamente la tabla
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            img_data = pix.tobytes("png")
-            imagenes.append({"mime_type": "image/png", "data": img_data})
-    return imagenes
-
-def extraer_texto_pdf(pdf_bytes, paginas_str=""):
-    """ Extrae solo el texto lineal (Perfecto para manuales de laboratorio). """
+def extraer_texto_matricial(pdf_bytes, paginas_str=""):
+    """ Extrae las tablas manteniendo las columnas intactas mediante barras (|) """
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     texto = ""
     try:
@@ -62,20 +38,29 @@ def extraer_texto_pdf(pdf_bytes, paginas_str=""):
                 if '-' in b:
                     s, e = b.split('-')
                     p_list.extend(range(int(s), int(e)+1))
-                else: 
-                    p_list.append(int(b))
-        else:
-            p_list = range(1, len(doc) + 1)
+                else: p_list.append(int(b))
+        else: p_list = range(1, len(doc) + 1)
         
         for p in p_list:
             if 0 < p <= len(doc):
-                texto += f"\n--- PÁGINA {p} ---\n" + doc[p-1].get_text("text") + "\n"
-    except Exception as e:
-        texto = f"Error al leer PDF: {e}"
+                page = doc[p-1]
+                texto += f"\n--- PÁGINA {p} ---\n"
+                # Intentamos extraer como tabla (matriz)
+                tablas = page.find_tables()
+                if tablas and len(tablas.tables) > 0:
+                    for tabla in tablas.tables:
+                        matriz = tabla.extract()
+                        for fila in matriz:
+                            fila_limpia = [" ".join(str(c).split()) if c else "VACIO" for c in fila]
+                            texto += " | ".join(fila_limpia) + "\n"
+                else:
+                    texto += page.get_text("text") + "\n"
+    except Exception as e: 
+        texto = f"Error lectura: {e}"
     return texto
 
 # =====================================================================
-# 3. GENERADOR DEL DOCUMENTO WORD (ESTILOS OFICIALES)
+# 3. GENERADOR DEL DOCUMENTO WORD (PLANTILLAS ESTRICTAS)
 # =====================================================================
 def crear_documento_word(datos_json, protocolo_nombre):
     try:
@@ -106,19 +91,22 @@ def crear_documento_word(datos_json, protocolo_nombre):
     # PLANTILLA A: ALEXION (ALXN2220-ATTR-CM-301)
     # ---------------------------------------------------------
     if es_alexion:
-        # --- PÁGINA 1: ENFERMERÍA ---
         doc.add_heading(f"HOJA DE ENFERMERÍA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
         doc.add_paragraph(f"Protocolo: {protocolo_nombre}     ID: ______________").bold = True
         
         doc.add_heading("PRIMEROS PASOS", level=2)
-        doc.add_paragraph("☐ Registrar visita para asignar infusión en Almac (IXRS)")
+        doc.add_paragraph("☐ Registrar visita para asignar infusión al paciente en Almac (IXRS)")
         doc.add_paragraph("☐ Fecha de la visita: ______________")
         
         doc.add_heading("PRE-INFUSIÓN (dentro de las 2 horas antes de la infusión)", level=2)
-        doc.add_paragraph("☐ Peso: _________ kg")
         
+        # El peso y signos vitales van condicionados a la tabla
+        if proc.get("signos_vitales"):
+            doc.add_paragraph("☐ Peso: _________ kg")
+            
+        # INTERRUPTOR DINÁMICO: Solo sale si hay marca en el protocolo
         if proc.get("test_embarazo"):
-            doc.add_paragraph("☐ Test de embarazo").bold = True
+            doc.add_paragraph("☐ Test de embarazo en orina (mujeres en edad fértil)").bold = True
 
         if proc.get("cuestionarios"):
             doc.add_paragraph("☐ Cuestionarios o PROs (TABLET en armario):").bold = True
@@ -162,10 +150,10 @@ def crear_documento_word(datos_json, protocolo_nombre):
                 t_vit_inf.cell(r+1, 0).text = text
             doc.add_paragraph("")
 
-        doc.add_heading("POST-INFUSIÓN (30 min)", level=2)
-        if proc.get("pk_post"): doc.add_paragraph("☐ PK-post infusión: sacar del brazo opuesto.").bold = True
-        if proc.get("ecg_post"): doc.add_paragraph("☐ Post-Electrocardiograma.").bold = True
-        if proc.get("signos_vitales"):
+            doc.add_heading("POST-INFUSIÓN (30 min)", level=2)
+            if proc.get("pk_post"): doc.add_paragraph("☐ PK-post infusión: sacar del brazo opuesto.").bold = True
+            if proc.get("ecg_post"): doc.add_paragraph("☐ Post-Electrocardiograma.").bold = True
+            
             t_vit_post = doc.add_table(rows=2, cols=8)
             t_vit_post.style = 'Table Grid'
             for i, h in enumerate(hdr): t_vit_post.cell(0, i).text = h
@@ -183,8 +171,8 @@ def crear_documento_word(datos_json, protocolo_nombre):
             doc.add_paragraph("☐ Examen físico COMPLETO").bold = True
             doc.add_paragraph("(Ver aspecto general, piel, nariz, orejas, ojos, cuello, garganta, corazón, abdomen, pulmones, sistema vascular, sistema nervioso, sistema musculo esquelético y extremidades)\n")
         
-        # El examen breve sale siempre que haya infusión (o si lo marca la tabla explícitamente)
-        if proc.get("examen_fisico_breve") or proc.get("infusion"): 
+        # El examen breve sale si lo marca el protocolo, o si hay infusión (tal como pediste para la hoja médica)
+        if proc.get("infusion") or proc.get("examen_fisico_breve"): 
             doc.add_paragraph("☐ Examen físico BREVE post-infusión (Dirigido por síntomas)").bold = True
             doc.add_paragraph("Inclusive of general appearance, heart, lungs, skin, musculoskeletal system and extremities and other organs or body systems as clinically indicated should be performed prior to the participant's discharge.\n")
 
@@ -199,7 +187,6 @@ def crear_documento_word(datos_json, protocolo_nombre):
     # PLANTILLA B: ALNYLAM (ALN-TTRSC04-003)
     # ---------------------------------------------------------
     else:
-        # --- PÁGINA 1: ENFERMERÍA ---
         doc.add_heading(f"{datos.get('visita', 'N/A')} - Hoja de Enfermería", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
         doc.add_paragraph("______________________________________________________________")
         doc.add_paragraph(f"Protocol: {protocolo_nombre}\nID:\nFecha de la visita:").bold = True
@@ -271,7 +258,7 @@ with col_logo:
 with col_titulo:
     st.markdown("<h1 style='color: #007d32; margin-top: 10px;'>BioCardio Clinical Assistant</h1>", unsafe_allow_html=True)
     st.markdown("<p style='font-size: 18px; color: #555;'>Herramienta profesional de gestión de ensayos clínicos</p>", unsafe_allow_html=True)
-    st.caption("v10.0 | Extracción con VISIÓN ARTIFICIAL (Imágenes Reales)")
+    st.caption("v12.0 | Control Dinámico de Procedimientos (Cero Alucinaciones)")
 
 with st.sidebar:
     st.markdown("### 🔑 Configuración")
@@ -286,13 +273,11 @@ with st.container():
 
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
-    st.markdown('<div class="step-container">Configura los parámetros (No es necesario añadir las páginas del lab).</div>', unsafe_allow_html=True)
     protocolo_sel = st.selectbox("Protocolo a maquetar:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
-    
     c1, c2 = st.columns(2)
-    p_tabla = c1.text_input("Páginas Tabla SoE (ej. 11-16):", "11-16")
-    v_proto = c1.text_input("Visita Protocolo (ej. V 25b, Day 589):", "V 25b")
-    p_ass = c2.text_input("Páginas Assessments (ej. 40-60):", "40-60")
+    p_tabla = c1.text_input("Páginas Tabla SoE (ej. 23-28):", "23-28")
+    v_proto = c1.text_input("Visita Protocolo (ej. V 25b):", "V 25b")
+    p_ass = c2.text_input("Páginas Assessments (ej. 67-80):", "67-80")
     v_lab = c2.text_input("Visita Manual Lab:", "Visita 25")
 
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
@@ -305,82 +290,74 @@ with st.container():
             status_text = st.empty()
             
             try:
-                # 1. Tomar fotografías de la Tabla SoE (¡Esto cambia todo!)
-                status_text.text("📷 Tomando fotografías de las páginas de la tabla...")
+                status_text.text("📖 Analizando celdas exactas de la tabla SoE...")
                 p_bytes = f_proto.read()
-                imagenes_soe = extraer_imagenes_pdf(p_bytes, p_tabla)
-                t_ass = extraer_texto_pdf(p_bytes, p_ass)
+                t_soe = extraer_texto_matricial(p_bytes, p_tabla)
+                t_ass = extraer_texto_matricial(p_bytes, p_ass)
                 barra_progreso.progress(40)
                 
-                # 2. Leer texto del Manual Lab
                 status_text.text("🧪 Leyendo el manual de laboratorio...")
                 t_lab = ""
                 if f_labs:
                     for f in f_labs: 
-                        t_lab += extraer_texto_pdf(f.read(), "")
+                        t_lab += extraer_texto_matricial(f.read(), "")
                 barra_progreso.progress(70)
                 
-                # 3. Inteligencia Artificial (Visión)
-                status_text.text("🧠 IA visualizando las columnas para no inventar marcas...")
+                status_text.text("🧠 IA aplicando razonamiento de Tolerancia Cero...")
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
-                Eres un Director Médico experto en ensayos clínicos. 
-                Te adjunto las IMÁGENES de las páginas de la tabla SoE (Schedule of Activities).
+                Eres un auditor clínico estricto. Tu trabajo es leer una TABLA SOE (matriz de datos) y extraer EXACTAMENTE los procedimientos marcados para la visita '{v_proto}'.
                 
-                TAREA PRINCIPAL (TOLERANCIA CERO A INVENTAR):
-                1. Busca visualmente en la imagen la columna de la visita '{v_proto}'.
-                2. Recorre esa columna fila por fila hacia abajo.
-                3. ¡IMPORTANTE! Si la celda de esa columna está VACÍA para un procedimiento, DEBES poner su valor a FALSE en el JSON. No deduzcas absolutamente nada que no esté marcado con una X.
+                INSTRUCCIONES DE RAZONAMIENTO OBLIGATORIO (Escribe tu razonamiento antes de generar el JSON):
+                1. Busca la fila de encabezados y encuentra la columna exacta de '{v_proto}'.
+                2. Recorre las filas hacia abajo mirando ÚNICAMENTE el contenido de esa columna.
+                3. Si la celda en esa columna está escrita como "VACIO", el procedimiento es FALSE. Si tiene una 'X', asterisco o número, es TRUE.
+                4. Haz una lista confirmando cada procedimiento: "ECG: Vacío -> False", "Pregnancy test: X -> True", "Cuestionarios: Vacío -> False", etc.
+
+                TABLA SOE MATRICIAL:
+                {t_soe}
                 
-                REGLAS DE MAPEO:
-                - cuestionarios: true si hay marca en cuestionarios (KCCQ, EQ-5D, SF-36, etc.)
-                - signos_vitales: true si hay marca en Vital signs o Weight
-                - ecg_pre: true si hay marca en 12-lead ECG
-                - ecg_post: true si hay marca explícita de ECG post-infusión ese día
-                - test_6mwt: true si hay marca en 6-Minute Walk Test
-                - laboratorio: true si hay marca en Central clinical laboratory tests
-                - infusion: true si hay marca en Study intervention infusion
-                - pk_post: true si hay marca en PK samples
-                - eco: true si hay marca en Echocardiogram
-                - examen_fisico: true SOLO si hay marca en 'Full physical examination'
-                - examen_fisico_breve: true SOLO si hay marca en 'Symptom-directed physical examination'
-                - nyha: true si hay marca en NYHA
-                - karnofsky: true si hay marca en Karnofsky
-                - test_embarazo: true si hay marca en Pregnancy test
+                MANUAL DE LABORATORIO:
+                {t_lab[:60000]}
                 
-                TEXTO DE APOYO (Assessments): {t_ass[:20000]}
-                
-                MANUAL DE LABORATORIO: {t_lab[:60000]}
-                (Solo extrae los tubos correspondientes a '{v_lab}' SI Y SOLO SI 'laboratorio' es true. Si es false, deja el texto vacío).
-                
-                FORMATO JSON OBLIGATORIO:
+                REGLAS DE MAPEO (SOLO SI LA CELDA DE LA COLUMNA '{v_proto}' TIENE MARCA):
+                - cuestionarios: true SOLO si hay marca en KCCQ, EQ-5D, SF-36, etc.
+                - signos_vitales: true SOLO si hay marca en Vital signs o Weight.
+                - ecg_pre: true SOLO si hay marca en 12-lead ECG.
+                - ecg_post: true SOLO si el protocolo exige explícitamente ECG post-infusión ese día.
+                - test_6mwt: true SOLO si hay marca en 6-Minute Walk Test.
+                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests.
+                - infusion: true SOLO si hay marca en Study intervention infusion.
+                - pk_post: true SOLO si hay marca en PK samples.
+                - eco: true SOLO si hay marca en Echocardiogram.
+                - examen_fisico: true SOLO si hay marca en 'Full physical examination'.
+                - examen_fisico_breve: true SOLO si hay marca en 'Symptom-directed physical examination'.
+                - test_embarazo: true SOLO si hay marca explícita en 'Pregnancy test' en la columna '{v_proto}'.
+                - nyha: true SOLO si hay marca en NYHA.
+                - karnofsky: true SOLO si hay marca en Karnofsky.
+
+                Tras tu razonamiento, genera el JSON estricto con este formato:
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
                     "cuestionarios": false, "signos_vitales": false, "ecg_pre": false, "ecg_post": false, "laboratorio": false, "infusion": false,
-                    "examen_fisico": false, "examen_fisico_breve": false,
-                    "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false, "test_embarazo": false
+                    "examen_fisico": false, "examen_fisico_breve": false, "test_embarazo": false,
+                    "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
-                  "detalles": {{ "laboratorio_tubos": "Resumen de tubos y colores..." }}
+                  "detalles": {{ "laboratorio_tubos": "Resumen extraído..." }}
                 }}
                 """
                 
-                # Preparamos el contenido (Prompt + Imágenes)
-                contents = [prompt]
-                for img in imagenes_soe:
-                    contents.append({"mime_type": img["mime_type"], "data": img["data"]})
+                res = model.generate_content(prompt)
                 
-                res = model.generate_content(contents)
-                
-                # 4. Generar el Word
-                status_text.text("📝 Maquetando documento Oficial...")
+                # Generamos el Word directamente con el JSON que escupe la IA al final
                 doc_word = crear_documento_word(res.text, protocolo_sel)
                 
                 barra_progreso.progress(100)
-                status_text.success("✅ Generado con precisión visual.")
-                st.download_button("⬇️ Descargar Documento Word", doc_word, f"{v_proto}.docx")
+                status_text.success("✅ Generado con éxito, sin inventar procedimientos.")
+                st.download_button("⬇️ Descargar Documento Oficial", doc_word, f"{v_proto}.docx")
                 
             except Exception as e: 
                 st.error(f"Error crítico en el proceso: {e}")
