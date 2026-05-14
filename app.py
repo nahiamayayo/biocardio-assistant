@@ -25,7 +25,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =====================================================================
-# 2. MOTOR DE EXTRACCIÓN DE TABLAS MATRICIALES (SIN ALUCINACIONES)
+# 2. MOTOR DE EXTRACCIÓN DE TABLAS MATRICIALES 
 # =====================================================================
 def extraer_texto_matricial(pdf_bytes, paginas_str=""):
     """ Extrae las tablas manteniendo las columnas intactas mediante barras (|) """
@@ -68,9 +68,10 @@ def crear_documento_word(datos_json, protocolo_nombre):
         match = re.search(r'\{.*\}', datos_json, re.DOTALL)
         datos = json.loads(match.group(0)) if match else json.loads(datos_json)
     except:
-        datos = {"visita": "Error", "procedimientos": {}, "detalles": {}}
+        datos = {"visita": "Error", "procedimientos": {}, "otros_procedimientos": [], "detalles": {}}
 
     proc = datos.get("procedimientos", {})
+    otros = datos.get("otros_procedimientos", [])
     det = datos.get("detalles", {})
     doc = Document()
     
@@ -202,7 +203,7 @@ def crear_documento_word(datos_json, protocolo_nombre):
         doc.add_paragraph("☐ Eventos adversos (AEs)\n").bold = True
         doc.add_paragraph("\nFirmado (Médico): _______________________      Fecha: ______________")
 
-    # ---------------------------------------------------------
+# ---------------------------------------------------------
     # PLANTILLA B: ALNYLAM (ALN-TTRSC04-003)
     # ---------------------------------------------------------
     else:
@@ -223,14 +224,9 @@ def crear_documento_word(datos_json, protocolo_nombre):
             doc.add_paragraph("☐ Electrocardiograma de 12 derivaciones").bold = True
             doc.add_paragraph("    ☐ FC: ____  ☐ PR: ____  ☐ QRS: ____  ☐ QT: ____  ☐ QTc: ____")
 
-        if proc.get("eco"):
-            doc.add_paragraph("☐ Ecocardiograma").bold = True
-
-        if proc.get("cuestionarios"):
-            doc.add_paragraph("☐ Cuestionarios y PROs realizados.").bold = True
-            
-        if proc.get("test_embarazo"):
-            doc.add_paragraph("☐ Test de embarazo en orina").bold = True
+        if proc.get("eco"): doc.add_paragraph("☐ Ecocardiograma").bold = True
+        if proc.get("cuestionarios"): doc.add_paragraph("☐ Cuestionarios y PROs realizados.").bold = True
+        if proc.get("test_embarazo"): doc.add_paragraph("☐ Test de embarazo en orina").bold = True
 
         if proc.get("laboratorio"):
             doc.add_paragraph("☐ Extraer muestras de sangre y orina para analítica central").bold = True
@@ -240,6 +236,11 @@ def crear_documento_word(datos_json, protocolo_nombre):
 
         if proc.get("infusion"):
             doc.add_paragraph("\n☐ Administración de medicación del estudio (Study drug administration)").bold = True
+
+        if otros:
+            doc.add_paragraph("\n☐ OTROS PROCEDIMIENTOS PROGRAMADOS:").bold = True
+            for proc_extra in otros:
+                doc.add_paragraph(f"    ☐ {proc_extra}")
 
         doc.add_paragraph("\n\nFirma: ______________________________        Fecha: ______________")
 
@@ -254,8 +255,11 @@ def crear_documento_word(datos_json, protocolo_nombre):
         doc.add_paragraph("\n☐ Medicamentos concomitantes, terapias o procedimientos actuales:").bold = True
         doc.add_paragraph("\n☐ Eventos adversos desde la firma del consentimiento:").bold = True
 
-        if proc.get("examen_fisico") or proc.get("examen_fisico_breve"): 
-            doc.add_paragraph("\n☐ Examen físico (Completo o dirigido por síntomas)").bold = True
+        # Exámenes físicos completamente separados
+        if proc.get("examen_fisico"): 
+            doc.add_paragraph("\n☐ Examen físico COMPLETO (Full physical examination)").bold = True
+        if proc.get("examen_fisico_breve"): 
+            doc.add_paragraph("\n☐ Examen físico BREVE (Symptom-directed physical examination)").bold = True
 
         if proc.get("nyha"): 
             doc.add_paragraph("☐ Clasificación funcional NYHA evaluada:").bold = True
@@ -271,7 +275,7 @@ def crear_documento_word(datos_json, protocolo_nombre):
         doc.add_paragraph("☐ Registrar próxima visita en Greenphire")
         doc.add_paragraph("☐ Escribir historia clínica en Diraya (imprimir, fechar y firmar)")
         doc.add_paragraph("☐ Rellenar CRF (Medidata)")
-
+        
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -352,21 +356,25 @@ with st.container():
                 MANUAL DE LABORATORIO:
                 {t_lab[:60000]}
                 
-                REGLAS DE MAPEO (SOLO SI LA CELDA DE LA COLUMNA '{v_proto}' TIENE MARCA):
+                REGLAS DE MAPEO ESTRICTO (SOLO SI LA CELDA DE LA COLUMNA '{v_proto}' TIENE MARCA):
                 - cuestionarios: true SOLO si hay marca en KCCQ, EQ-5D, SF-36, etc.
                 - signos_vitales: true SOLO si hay marca en Vital signs o Weight.
                 - ecg_pre: true SOLO si hay marca en 12-lead ECG.
                 - ecg_post: true SOLO si el protocolo exige explícitamente ECG post-infusión ese día.
                 - test_6mwt: true SOLO si hay marca en 6-Minute Walk Test.
-                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests. (Si es true, extrae los tubos del manual para la visita '{v_lab}', INDICANDO EXPRESAMENTE EL COLOR DE LOS TAPONES para que enfermería prepare el material).
+                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests. (Si es true, busca la visita '{v_lab}' en el manual. BÚSQUEDA DE SINÓNIMOS: Si buscas 'W24', revisa también 'Week 24' o 'Month 6'. Extrae los tubos necesarios E INDICA EXPRESAMENTE EL COLOR DE LOS TAPONES buscando esa información en el texto de las instrucciones del manual).
                 - infusion: true SOLO si hay marca en Study intervention infusion.
                 - pk_post: true SOLO si hay marca en PK samples.
                 - eco: true SOLO si hay marca en Echocardiogram o ECHO.
                 - examen_fisico: true SOLO si hay marca en 'Full physical examination'.
-                - examen_fisico_breve: true SOLO si hay marca en 'Symptom-directed physical examination'.
+                - examen_fisico_breve: true SOLO si hay marca en 'Symptom-directed physical examination', 'Targeted physical examination' o 'Symptom-directed'.
                 - test_embarazo: true SOLO si hay marca explícita en 'Pregnancy test' en la columna '{v_proto}'.
                 - nyha: true SOLO si hay marca en NYHA.
                 - karnofsky: true SOLO si hay marca en Karnofsky.
+
+                ¡REGLA DE DOBLE VERIFICACIÓN Y EXTRACTOR UNIVERSAL (ESPECIAL ALNYLAM)!:
+                Para CUALQUIER OTRA FILA de la tabla (ej. 'Vitamin A', 'Ophthalmology', etc.) que tenga una marca (X) en la columna '{v_proto}', captura el nombre exacto y añádelo a "otros_procedimientos".
+                ¡DOBLE VERIFICACIÓN!: Antes de añadir una prueba extra, vuelve a mirar la celda exacta de esa fila en la columna '{v_proto}'. Si está "VACIO", ESTÁ ESTRICTAMENTE PROHIBIDO AÑADIRLA. No incluyas pruebas de visitas adyacentes.
 
                 Tras tu razonamiento, genera el JSON estricto con este formato:
                 {{
@@ -376,7 +384,8 @@ with st.container():
                     "examen_fisico": false, "examen_fisico_breve": false, "test_embarazo": false,
                     "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
-                  "detalles": {{ "laboratorio_tubos": "Resumen extraído con colores..." }}
+                  "otros_procedimientos": ["Nombre de prueba 1", "Nombre de prueba 2"],
+                  "detalles": {{ "laboratorio_tubos": "Resumen extraído con colores de tapones..." }}
                 }}
                 """
                 
