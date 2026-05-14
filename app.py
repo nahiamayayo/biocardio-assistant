@@ -295,7 +295,7 @@ with col_titulo:
 with st.sidebar:
     st.markdown("### 🔑 Configuración")
     st.markdown("Para que el sistema funcione, necesitas una **API Key** personal.")
-    st.markdown("[👉 Consigue tu clave gratuita en Google AI Studio](https://aistudio.google.com/app/apikey)")
+    st.markdown("[Consigue tu clave gratuita en Google AI Studio](https://aistudio.google.com/app/apikey)")
     api_key = st.text_input("Introduce API Key:", type="password")
     modelo_seleccionado = st.selectbox("Modelo:", ["gemini-2.5-flash", "gemini-2.0-flash-lite"])
 
@@ -341,7 +341,7 @@ with st.container():
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
-                prompt = f"""
+               prompt = f"""
                 Eres un auditor clínico estricto. Tu trabajo es leer una TABLA SOE (matriz de datos) y extraer EXACTAMENTE los procedimientos marcados para la visita '{v_proto}'.
                 
                 INSTRUCCIONES DE RAZONAMIENTO OBLIGATORIO (Escribe tu razonamiento antes de generar el JSON):
@@ -356,13 +356,13 @@ with st.container():
                 MANUAL DE LABORATORIO:
                 {t_lab[:60000]}
                 
-                REGLAS DE MAPEO ESTRICTO (SOLO SI LA CELDA DE LA COLUMNA '{v_proto}' TIENE MARCA):
+                REGLAS DE MAPEO (SOLO SI LA CELDA DE LA COLUMNA '{v_proto}' TIENE MARCA):
                 - cuestionarios: true SOLO si hay marca en KCCQ, EQ-5D, SF-36, etc.
                 - signos_vitales: true SOLO si hay marca en Vital signs o Weight.
                 - ecg_pre: true SOLO si hay marca en 12-lead ECG.
                 - ecg_post: true SOLO si el protocolo exige explícitamente ECG post-infusión ese día.
                 - test_6mwt: true SOLO si hay marca en 6-Minute Walk Test.
-                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests. (Si es true, busca la visita '{v_lab}' en el manual. BÚSQUEDA DE SINÓNIMOS: Si buscas 'W24', revisa también 'Week 24' o 'Month 6'. Extrae los tubos necesarios E INDICA EXPRESAMENTE EL COLOR DE LOS TAPONES buscando esa información en el texto de las instrucciones del manual).
+                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests. (Si es true, busca la visita '{v_lab}' en el texto del manual. PARA LOS COLORES DE LOS TUBOS USA OBLIGATORIAMENTE ESTA GUÍA EXCLUSIVA: Coagulación = Tapón azul (Na Citrate); Chemistry, cardiac biomarker, hep A = Tapón rojo (Serum tube clot activator); LFTs, Serum potassium, serum hcg, fsh, Vitamina A, ANA, ASMA, LKM 1, Anti-mitochondrial Ab, Anti-SLA = Tapón rojo (SST); HCV Confirmation = Tapón amarillo (SST); ADA, TTR protein, future research serum = Tapón rojo (Serum tube clot activator); Hematology, NfL, Genotyping, Plasma PK, future research plasma = Tapón morado (K2EDTA); Urinalysis, future research urine = Bote de orina. ESTÁ ESTRICTAMENTE PROHIBIDO dar explicaciones conversacionales como "El manual no detalla los colores". Limítate a cruzar la prueba requerida con esta guía y escribir el tubo correspondiente).
                 - infusion: true SOLO si hay marca en Study intervention infusion.
                 - pk_post: true SOLO si hay marca en PK samples.
                 - eco: true SOLO si hay marca en Echocardiogram o ECHO.
@@ -373,8 +373,8 @@ with st.container():
                 - karnofsky: true SOLO si hay marca en Karnofsky.
 
                 ¡REGLA DE DOBLE VERIFICACIÓN Y EXTRACTOR UNIVERSAL (ESPECIAL ALNYLAM)!:
-                Para CUALQUIER OTRA FILA de la tabla (ej. 'Vitamin A', 'Ophthalmology', etc.) que tenga una marca (X) en la columna '{v_proto}', captura el nombre exacto y añádelo a "otros_procedimientos".
-                ¡DOBLE VERIFICACIÓN!: Antes de añadir una prueba extra, vuelve a mirar la celda exacta de esa fila en la columna '{v_proto}'. Si está "VACIO", ESTÁ ESTRICTAMENTE PROHIBIDO AÑADIRLA. No incluyas pruebas de visitas adyacentes.
+                Para CUALQUIER OTRA FILA de la tabla (ej. 'Vitamin A') que tenga una marca (X) en la columna '{v_proto}', captura el nombre exacto de ese procedimiento y añádelo a "otros_procedimientos".
+                CUIDADO EXTREMO: Comprueba DOS VECES que la celda de esa prueba en la columna '{v_proto}' NO esté vacía. Si está "VACIO" o en blanco, PROHIBIDO incluirlo. No incluyas pruebas de visitas adyacentes.
 
                 Tras tu razonamiento, genera el JSON estricto con este formato:
                 {{
@@ -385,7 +385,7 @@ with st.container():
                     "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
                   "otros_procedimientos": ["Nombre de prueba 1", "Nombre de prueba 2"],
-                  "detalles": {{ "laboratorio_tubos": "Resumen extraído con colores de tapones..." }}
+                  "detalles": {{ "laboratorio_tubos": "Resumen directo extraído con colores..." }}
                 }}
                 """
                 
