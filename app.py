@@ -341,7 +341,7 @@ with st.container():
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
-               prompt = f"""
+                prompt = f"""
                 Eres un auditor clínico estricto. Tu trabajo es leer una TABLA SOE (matriz de datos) y extraer EXACTAMENTE los procedimientos marcados para la visita '{v_proto}'.
                 
                 INSTRUCCIONES DE RAZONAMIENTO OBLIGATORIO (Escribe tu razonamiento antes de generar el JSON):
