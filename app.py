@@ -342,41 +342,39 @@ with st.container():
                 model = genai.GenerativeModel(modelo_seleccionado)
                 
                 prompt = f"""
-                Eres un auditor clínico estricto. Tu trabajo es leer una TABLA SOE (matriz de datos) y extraer EXACTAMENTE los procedimientos marcados para la visita '{v_proto}'.
+                Analiza la tabla SoE para la visita '{v_proto}'.
                 
-                INSTRUCCIONES DE RAZONAMIENTO OBLIGATORIO (Escribe tu razonamiento antes de generar el JSON):
-                1. Busca la fila de encabezados y encuentra la columna exacta de '{v_proto}'.
-                2. Recorre las filas hacia abajo mirando ÚNICAMENTE el contenido de esa columna.
-                3. Si la celda en esa columna está escrita como "VACIO", el procedimiento es FALSE. Si tiene una 'X', asterisco o número, es TRUE.
-                4. Haz una lista confirmando cada procedimiento.
-
-                TABLA SOE MATRICIAL:
+                TABLA SOE:
                 {t_soe}
                 
                 MANUAL DE LABORATORIO:
                 {t_lab[:60000]}
                 
-                REGLAS DE MAPEO (SOLO SI LA CELDA DE LA COLUMNA '{v_proto}' TIENE MARCA):
-                - cuestionarios: true SOLO si hay marca en KCCQ, EQ-5D, SF-36, etc.
-                - signos_vitales: true SOLO si hay marca en Vital signs o Weight.
-                - ecg_pre: true SOLO si hay marca en 12-lead ECG.
-                - ecg_post: true SOLO si el protocolo exige explícitamente ECG post-infusión ese día.
-                - test_6mwt: true SOLO si hay marca en 6-Minute Walk Test.
-                - laboratorio: true SOLO si hay marca en Central clinical laboratory tests. (Si es true, busca la visita '{v_lab}' en el texto del manual. PARA LOS COLORES DE LOS TUBOS USA OBLIGATORIAMENTE ESTA GUÍA EXCLUSIVA: Coagulación = Tapón azul (Na Citrate); Chemistry, cardiac biomarker, hep A = Tapón rojo (Serum tube clot activator); LFTs, Serum potassium, serum hcg, fsh, Vitamina A, ANA, ASMA, LKM 1, Anti-mitochondrial Ab, Anti-SLA = Tapón rojo (SST); HCV Confirmation = Tapón amarillo (SST); ADA, TTR protein, future research serum = Tapón rojo (Serum tube clot activator); Hematology, NfL, Genotyping, Plasma PK, future research plasma = Tapón morado (K2EDTA); Urinalysis, future research urine = Bote de orina. ESTÁ ESTRICTAMENTE PROHIBIDO dar explicaciones conversacionales como "El manual no detalla los colores". Limítate a cruzar la prueba requerida con esta guía y escribir el tubo correspondiente).
-                - infusion: true SOLO si hay marca en Study intervention infusion.
-                - pk_post: true SOLO si hay marca en PK samples.
-                - eco: true SOLO si hay marca en Echocardiogram o ECHO.
-                - examen_fisico: true SOLO si hay marca en 'Full physical examination'.
-                - examen_fisico_breve: true SOLO si hay marca en 'Symptom-directed physical examination', 'Targeted physical examination' o 'Symptom-directed'.
-                - test_embarazo: true SOLO si hay marca explícita en 'Pregnancy test' en la columna '{v_proto}'.
-                - nyha: true SOLO si hay marca en NYHA.
-                - karnofsky: true SOLO si hay marca en Karnofsky.
+                REGLAS DE MAPEO (SOLO SI LA CELDA TIENE 'X'):
+                - cuestionarios: marca en KCCQ, EQ-5D, SF-36, etc.
+                - signos_vitales: marca en Vital signs o Weight.
+                - ecg_pre: marca en 12-lead ECG.
+                - test_6mwt: marca en 6-Minute Walk Test.
+                - laboratorio: marca en Central clinical laboratory tests.
+                - infusion: marca en Study drug administration.
+                - eco: marca en Echocardiogram.
+                - examen_fisico: marca en 'Full physical examination'.
+                - examen_fisico_breve: marca en 'Symptom-directed'.
+                - test_embarazo: marca en 'Pregnancy test'.
+                - nyha/karnofsky: marcas respectivas.
 
-                ¡REGLA DE DOBLE VERIFICACIÓN Y EXTRACTOR UNIVERSAL (ESPECIAL ALNYLAM)!:
-                Para CUALQUIER OTRA FILA de la tabla (ej. 'Vitamin A') que tenga una marca (X) en la columna '{v_proto}', captura el nombre exacto de ese procedimiento y añádelo a "otros_procedimientos".
-                CUIDADO EXTREMO: Comprueba DOS VECES que la celda de esa prueba en la columna '{v_proto}' NO esté vacía. Si está "VACIO" o en blanco, PROHIBIDO incluirlo. No incluyas pruebas de visitas adyacentes.
+                GUÍA DE TUBOS (USA ESTOS COLORES EXACTOS):
+                - Coagulation: Azul (Na Citrate)
+                - Chemistry, cardiac biomarker, hep A: Rojo (Serum tube clot activator)
+                - LFTs, Potassium, hcg, fsh, Vitamin A, ANA, ASMA, LKM 1, Mitochondrial, SLA: Rojo (SST)
+                - HCV Confirmation: Amarillo (SST)
+                - ADA, TTR protein, future research serum: Rojo (Serum tube clot activator)
+                - Hematology, NfL, Genotyping, Plasma PK: Morado (K2EDTA)
+                - Urinalysis: Bote de orina
 
-                Tras tu razonamiento, genera el JSON estricto con este formato:
+                ¡REGLA CRÍTICA!: Si una celda está VACÍA en la columna '{v_proto}', el procedimiento es FALSE. No inventes marcas.
+                
+                Responde ÚNICAMENTE con un JSON válido:
                 {{
                   "visita": "{v_proto}",
                   "procedimientos": {{
@@ -384,12 +382,13 @@ with st.container():
                     "examen_fisico": false, "examen_fisico_breve": false, "test_embarazo": false,
                     "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
-                  "otros_procedimientos": ["Nombre de prueba 1", "Nombre de prueba 2"],
-                  "detalles": {{ "laboratorio_tubos": "Resumen directo extraído con colores..." }}
+                  "otros_procedimientos": [],
+                  "detalles": {{ "laboratorio_tubos": "Lista de tubos con sus colores según la guía" }}
                 }}
                 """
                 
-                res = model.generate_content(prompt)
+                # Esta línea es la que evita el "Error" en el Word:
+                res = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
                 
                 doc_word = crear_documento_word(res.text, protocolo_sel)
                 
