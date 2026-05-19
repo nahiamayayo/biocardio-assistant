@@ -262,12 +262,25 @@ def crear_documento_word(datos_json, protocolo_nombre):
             doc.add_paragraph("\n☐ Examen físico BREVE (Symptom-directed physical examination)").bold = True
 
         if proc.get("nyha"): 
-            doc.add_paragraph("☐ Clasificación funcional NYHA evaluada:").bold = True
-            doc.add_paragraph("   ☐ NYHA I  ☐ NYHA II  ☐ NYHA III  ☐ NYHA IV\n")
+            doc.add_paragraph("☐ Clasificación funcional NYHA (seleccionar una):").bold = True
+            doc.add_paragraph("   ☐ NYHA I: Asintomático")
+            doc.add_paragraph("   ☐ NYHA II: Falta de aire (disnea) a grandes esfuerzos")
+            doc.add_paragraph("   ☐ NYHA III: Falta de aire (disnea) a pequeños esfuerzos")
+            doc.add_paragraph("   ☐ NYHA IV: Falta de aire (disnea) en reposo (se ahoga estando quieto)\n")
 
         if proc.get("karnofsky"): 
-            doc.add_paragraph("☐ Puntuación Karnofsky (Karnofsky Performance Status):").bold = True
-            doc.add_paragraph("   ☐ 100% ☐ 90% ☐ 80% ☐ 70% ☐ 60% ☐ 50% ☐ 40% ☐ 30% ☐ 20% ☐ 10% ☐ 0%\n")
+            doc.add_paragraph("☐ Discapacidad (con escala Karnofsky):").bold = True
+            doc.add_paragraph("   100% - Actividad normal (capaz de desempeñar actividades), asintomático.")
+            doc.add_paragraph("   90% - Actividad normal, con síntomas y signos leves.")
+            doc.add_paragraph("   80% - Actividad normal con esfuerzo, síntomas leves.")
+            doc.add_paragraph("   70% - Capaz de cuidar de si mismo, pero no realiza trabajo activo.")
+            doc.add_paragraph("   60% - En ocasiones necesita ayuda, capaz de cuidarse la mayor parte del tiempo.")
+            doc.add_paragraph("   50% - Necesita atención médica y ayuda frecuente.")
+            doc.add_paragraph("   40% - Con discapacidad, requiere cuidados especiales.")
+            doc.add_paragraph("   30% - Discapacidad grave, en condiciones de hospitalización.")
+            doc.add_paragraph("   20% - Enfermo grave, necesita tratamiento activo de sostén.")
+            doc.add_paragraph("   10% - Paciente decaído o moribundo.")
+            doc.add_paragraph("   0% - Paciente fallecido.\n")
 
         if proc.get("test_6mwt"): doc.add_paragraph("☐ Test de los 6 minutos (6MWT) completado").bold = True
 
