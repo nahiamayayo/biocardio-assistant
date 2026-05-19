@@ -312,7 +312,7 @@ with st.container():
     p_tabla = c1.text_input("Páginas Tabla SoE (ej. 23-28):")
     v_proto = c1.text_input("Visita Protocolo (ej. V 30/W108):")
     p_ass = c2.text_input("Páginas Assessments (ej. 67-80):")
-    v_lab = c2.text_input("Visita Manual Lab:", "Visit 30/W108")
+    v_lab = c2.text_input("Visita Manual Lab:")
 
 st.markdown('<div class="step-header">📋 Paso 3: Generación del Checklist</div>', unsafe_allow_html=True)
 with st.container():
