@@ -87,9 +87,10 @@ def crear_documento_word(datos_json, protocolo_nombre):
             h_style.font.color.rgb = RGBColor(0, 0, 0)
 
     es_alexion = "ALXN" in protocolo_nombre
+    es_pleriflag = "PLERIFLAG" in protocolo_nombre
 
     # ---------------------------------------------------------
-    # PLANTILLA A: ALEXION (ALXN2220-ATTR-CM-301)
+    # PLANTILLA A: ALEXION (ALXN2220-ATTR-CM-301) - INTACTA
     # ---------------------------------------------------------
     if es_alexion:
         doc.add_heading(f"HOJA DE ENFERMERÍA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -203,8 +204,52 @@ def crear_documento_word(datos_json, protocolo_nombre):
         doc.add_paragraph("☐ Eventos adversos (AEs)\n").bold = True
         doc.add_paragraph("\nFirmado (Médico): _______________________      Fecha: ______________")
 
-# ---------------------------------------------------------
-    # PLANTILLA B: ALNYLAM (ALN-TTRSC04-003)
+    # ---------------------------------------------------------
+    # PLANTILLA B: PETHEMA (PLERIFLAG) - NUEVA INCORPORACIÓN
+    # ---------------------------------------------------------
+    elif es_pleriflag:
+        doc.add_heading(f"HOJA DE VISITA: {datos.get('visita', 'N/A')}", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
+        doc.add_paragraph(f"Protocolo: PLERIFLAG (PETHEMA)     ID PACIENTE: ______________").bold = True
+        doc.add_paragraph(f"Fecha de la visita: ______________     Ciclo/Día: ______________\n")
+        
+        doc.add_heading("1. EVALUACIÓN Y SEGURIDAD (ENFERMERÍA)", level=2)
+        if proc.get("signos_vitales"):
+            doc.add_paragraph("☐ Constantes vitales completas:").bold = True
+            hdr = ["Constante", "Valor", "Constante", "Valor"]
+            t_vit = doc.add_table(rows=3, cols=4)
+            t_vit.style = 'Table Grid'
+            t_vit.cell(0, 0).text = "TA (mmHg)"
+            t_vit.cell(0, 2).text = "Frec. Cardíaca (bpm)"
+            t_vit.cell(1, 0).text = "Temperatura (ºC)"
+            t_vit.cell(1, 2).text = "Frec. Resp. (rpm)"
+            t_vit.cell(2, 0).text = "Saturación O2 (%)"
+            t_vit.cell(2, 2).text = "Peso (kg)"
+            doc.add_paragraph("")
+
+        if proc.get("ecg_pre"):
+            doc.add_paragraph("☐ Realizar Electrocardiograma (ECG) de control").bold = True
+            
+        if proc.get("test_embarazo"):
+            doc.add_paragraph("☐ Test de embarazo (si aplica, previo a administración de quimioterapia)").bold = True
+
+        doc.add_heading("2. PROCEDIMIENTOS DE LABORATORIO", level=2)
+        if proc.get("laboratorio"):
+            doc.add_paragraph("☐ Extracción analítica obligatoria para Hematología:").bold = True
+            doc.add_paragraph(f"Instrucciones de muestras obtenidas: {det.get('laboratorio_tubos', 'Ver manual de laboratorio')}").italic = True
+            doc.add_paragraph("☐ Control farmacocinético / Muestras adicionales.")
+
+        doc.add_heading("3. EVALUACIÓN CLÍNICA (MÉDICO)", level=2)
+        if proc.get("examen_fisico") or proc.get("examen_fisico_breve"):
+            doc.add_paragraph("☐ Examen físico y evaluación del estado general (ECOG/Karnofsky)").bold = True
+            
+        doc.add_paragraph("☐ Revisión de toxicidades y efectos adversos según criterios CTCAE")
+        doc.add_paragraph("☐ Verificación de criterios de continuación del ciclo")
+        doc.add_paragraph("☐ Medicación concomitante administrada\n")
+        
+        doc.add_paragraph("\nFirma Investigador: _______________________      Fecha: ______________")
+
+    # ---------------------------------------------------------
+    # PLANTILLA C: ALNYLAM (ALN-TTRSC04-003) - INTACTA
     # ---------------------------------------------------------
     else:
         doc.add_heading(f"{datos.get('visita', 'N/A')} - Hoja de Enfermería", level=1).alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -262,25 +307,12 @@ def crear_documento_word(datos_json, protocolo_nombre):
             doc.add_paragraph("\n☐ Examen físico BREVE (Symptom-directed physical examination)").bold = True
 
         if proc.get("nyha"): 
-            doc.add_paragraph("☐ Clasificación funcional NYHA (seleccionar una):").bold = True
-            doc.add_paragraph("   ☐ NYHA I: Asintomático")
-            doc.add_paragraph("   ☐ NYHA II: Falta de aire (disnea) a grandes esfuerzos")
-            doc.add_paragraph("   ☐ NYHA III: Falta de aire (disnea) a pequeños esfuerzos")
-            doc.add_paragraph("   ☐ NYHA IV: Falta de aire (disnea) en reposo (se ahoga estando quieto)\n")
+            doc.add_paragraph("☐ Clasificación funcional NYHA evaluada:").bold = True
+            doc.add_paragraph("   ☐ NYHA I  ☐ NYHA II  ☐ NYHA III  ☐ NYHA IV\n")
 
         if proc.get("karnofsky"): 
-            doc.add_paragraph("☐ Discapacidad (con escala Karnofsky):").bold = True
-            doc.add_paragraph("   100% - Actividad normal (capaz de desempeñar actividades), asintomático.")
-            doc.add_paragraph("   90% - Actividad normal, con síntomas y signos leves.")
-            doc.add_paragraph("   80% - Actividad normal con esfuerzo, síntomas leves.")
-            doc.add_paragraph("   70% - Capaz de cuidar de si mismo, pero no realiza trabajo activo.")
-            doc.add_paragraph("   60% - En ocasiones necesita ayuda, capaz de cuidarse la mayor parte del tiempo.")
-            doc.add_paragraph("   50% - Necesita atención médica y ayuda frecuente.")
-            doc.add_paragraph("   40% - Con discapacidad, requiere cuidados especiales.")
-            doc.add_paragraph("   30% - Discapacidad grave, en condiciones de hospitalización.")
-            doc.add_paragraph("   20% - Enfermo grave, necesita tratamiento activo de sostén.")
-            doc.add_paragraph("   10% - Paciente decaído o moribundo.")
-            doc.add_paragraph("   0% - Paciente fallecido.\n")
+            doc.add_paragraph("☐ Puntuación Karnofsky (Karnofsky Performance Status):").bold = True
+            doc.add_paragraph("   ☐ 100% ☐ 90% ☐ 80% ☐ 70% ☐ 60% ☐ 50% ☐ 40% ☐ 30% ☐ 20% ☐ 10% ☐ 0%\n")
 
         if proc.get("test_6mwt"): doc.add_paragraph("☐ Test de los 6 minutos (6MWT) completado").bold = True
 
@@ -320,10 +352,10 @@ with st.container():
 
 st.markdown('<div class="step-header">🔍 Paso 2: Configuración de la Visita</div>', unsafe_allow_html=True)
 with st.container():
-    protocolo_sel = st.selectbox("Protocolo a maquetar:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)"])
+    protocolo_sel = st.selectbox("Protocolo a maquetar:", ["Alexion (ALXN2220-ATTR-CM-301)", "Alnylam (ALN-TTRSC04-003)", "PETHEMA (PLERIFLAG)"])
     c1, c2 = st.columns(2)
     p_tabla = c1.text_input("Páginas Tabla SoE (ej. 23-28):")
-    v_proto = c1.text_input("Visita Protocolo (ej. V 30/W108):")
+    v_proto = c1.text_input("Visita Protocolo (ej. V 30/W108 o Día 1):")
     p_ass = c2.text_input("Páginas Assessments (ej. 67-80):")
     v_lab = c2.text_input("Visita Manual Lab:")
 
@@ -364,19 +396,19 @@ with st.container():
                 {t_lab[:60000]}
                 
                 REGLAS DE MAPEO (SOLO SI LA CELDA TIENE 'X'):
-                - cuestionarios: marca en KCCQ, EQ-5D, SF-36, etc.
-                - signos_vitales: marca en Vital signs o Weight.
-                - ecg_pre: marca en 12-lead ECG.
-                - test_6mwt: marca en 6-Minute Walk Test.
-                - laboratorio: marca en Central clinical laboratory tests.
-                - infusion: marca en Study drug administration.
-                - eco: marca en Echocardiogram.
-                - examen_fisico: marca en 'Full physical examination'.
-                - examen_fisico_breve: marca en 'Symptom-directed'.
-                - test_embarazo: marca en 'Pregnancy test'.
-                - nyha/karnofsky: marcas respectivas.
+                - cuestionarios: marca en KCCQ, EQ-5D, SF-36, PROs, etc.
+                - signos_vitales: marca en Vital signs, Weight o constantes.
+                - ecg_pre: marca en 12-lead ECG o Electrocardiograma.
+                - test_6mwt: marca en 6-Minute Walk Test o caminata.
+                - laboratorio: marca en Central clinical laboratory tests, Hematología, CBC o analítica.
+                - infusion: marca en Study drug administration, quimioterapia o infusión.
+                - eco: marca en Echocardiogram o Ecocardiograma.
+                - examen_fisico: marca en 'Full physical examination' o examen completo.
+                - examen_fisico_breve: marca en 'Symptom-directed', evaluación breve o ECOG.
+                - test_embarazo: marca en 'Pregnancy test' o test de embarazo.
+                - nyha/karnofsky: marcas respectivas o escalas funcionales.
 
-                GUÍA DE TUBOS (USA ESTOS COLORES EXACTOS):
+                GUÍA DE TUBOS (USA ESTOS COLORES EXACTOS PARA ALNYLAM):
                 - Coagulation: Azul (Na Citrate)
                 - Chemistry, cardiac biomarker, hep A: Rojo (Serum tube clot activator)
                 - LFTs, Potassium, hcg, fsh, Vitamin A, ANA, ASMA, LKM 1, Mitochondrial, SLA: Rojo (SST)
@@ -396,7 +428,7 @@ with st.container():
                     "nyha": false, "karnofsky": false, "test_6mwt": false, "pk_post": false, "eco": false
                   }},
                   "otros_procedimientos": [],
-                  "detalles": {{ "laboratorio_tubos": "Lista de tubos con sus colores según la guía" }}
+                  "detalles": {{ "laboratorio_tubos": "Lista de tubos con sus colores según la guía o el manual" }}
                 }}
                 """
                 
